@@ -1,0 +1,47 @@
+# Local application config goes here.  Do not check in production secrets.
+# These are for development and test only.
+
+#
+# Development - Local - Root: '/development/connect'
+#
+development:
+  connect:
+    symmetric_encryption:
+      key:     QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=
+      iv:      QUJDREVGMTIzNDU2Nzg5MA==
+      version: 2
+
+    mysql:
+      database:   secret_config_development
+      username:   secret_config
+      password:   secret_configrules
+      host:       127.0.0.1
+
+    mongo:
+      database:   secret_config_development
+      primary:    127.0.0.1:27017
+      secondary:  127.0.0.1:27018
+
+    secrets:
+      secret_key_base: somereallylongstring
+
+test:
+  connect:
+    symmetric_encryption:
+      key:     QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=
+      iv:      QUJDREVGMTIzNDU2Nzg5MA==
+      version: 2
+
+    mysql:
+      database:   secret_config_test
+      username:   secret_config
+      password:   secret_configrules
+      host:       127.0.0.1
+
+    mongo:
+      database:   secret_config_test
+      primary:    127.0.0.1:27017
+      secondary:  127.0.0.1:27018
+
+    secrets:
+      secret_key_base: somereallylongteststring
