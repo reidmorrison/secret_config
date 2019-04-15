@@ -7,7 +7,7 @@ module SecretConfig
     class File
       attr_reader :file_name
 
-      def initialize(file_name: ENV['SECRETCONFIG_FILE_NAME'] || "config/application.yml")
+      def initialize(file_name: "config/application.yml")
         @file_name = file_name
         raise(ConfigurationError, "Cannot find config file: #{file_name}") unless ::File.exist?(file_name)
       end

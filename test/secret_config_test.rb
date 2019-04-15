@@ -7,18 +7,17 @@ class SecretConfigTest < Minitest::Test
     end
 
     let :root do
-      "/development/connect"
+      "/development/my_application"
     end
 
     before do
-      ENV['SECRETCONFIG_FILE_NAME'] = file_name
-      SecretConfig.root             = root
-      SecretConfig.provider         = :file
+      SecretConfig.root = root
+      SecretConfig.provider :file, file_name: file_name
     end
 
     describe '#configuration' do
       it 'returns a copy of the config' do
-        assert_equal "127.0.0.1", SecretConfig.configuration["/development/connect/mysql/host"]
+        assert_equal "127.0.0.1", SecretConfig.configuration.dig("development", "my_application", "mysql", "host")
       end
     end
 

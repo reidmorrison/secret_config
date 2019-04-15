@@ -6,7 +6,7 @@ module SecretConfig
     class Ssm
       attr_reader :client, :key_id
 
-      def initialize(key_id: ENV["SECRETCONFIG_KEY_ID"])
+      def initialize(key_id: nil)
         @key_id = key_id
         logger  = SemanticLogger['Aws::SSM'] if defined?(SemanticLogger)
         @client = Aws::SSM::Client.new(logger: logger)

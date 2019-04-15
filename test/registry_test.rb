@@ -7,38 +7,36 @@ class RegistryTest < Minitest::Test
     end
 
     let :root do
-      "/development/connect"
+      "/development/my_application"
+    end
+
+    let :provider do
+      SecretConfig::Providers::File.new(file_name: file_name)
     end
 
     let :registry do
-      ENV['SECRETCONFIG_FILE_NAME'] = file_name
-
-      SecretConfig::Registry.new(root: root, provider: :file)
+      SecretConfig::Registry.new(root: root, provider: provider)
     end
 
     let :expected do
       {
-        "/development/connect/mongo/database"               => "secret_config_development",
-        "/development/connect/mongo/primary"                => "127.0.0.1:27017",
-        "/development/connect/mongo/secondary"              => "127.0.0.1:27018",
-        "/development/connect/mysql/database"               => "secret_config_development",
-        "/development/connect/mysql/password"               => "secret_configrules",
-        "/development/connect/mysql/username"               => "secret_config",
-        "/development/connect/mysql/host"                   => "127.0.0.1",
-        "/development/connect/secrets/secret_key_base"      => "somereallylongstring",
-        "/development/connect/symmetric_encryption/key"     => "QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=",
-        "/development/connect/symmetric_encryption/version" => 2,
-        "/development/connect/symmetric_encryption/iv"      => "QUJDREVGMTIzNDU2Nzg5MA=="
+        "/development/my_application/mongo/database"               => "secret_config_development",
+        "/development/my_application/mongo/primary"                => "127.0.0.1:27017",
+        "/development/my_application/mongo/secondary"              => "127.0.0.1:27018",
+        "/development/my_application/mysql/database"               => "secret_config_development",
+        "/development/my_application/mysql/password"               => "secret_configrules",
+        "/development/my_application/mysql/username"               => "secret_config",
+        "/development/my_application/mysql/host"                   => "127.0.0.1",
+        "/development/my_application/secrets/secret_key_base"      => "somereallylongstring",
+        "/development/my_application/symmetric_encryption/key"     => "QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=",
+        "/development/my_application/symmetric_encryption/version" => 2,
+        "/development/my_application/symmetric_encryption/iv"      => "QUJDREVGMTIzNDU2Nzg5MA=="
       }
     end
 
     describe '#configuration' do
       it 'returns a copy of the config' do
-        paths = registry.configuration
-
-        expected.each_pair do |key, value|
-          assert_equal value, paths[key], "Path: #{key}"
-        end
+        assert_equal "127.0.0.1", registry.configuration.dig("development", "my_application", "mysql", "host")
       end
     end
 
@@ -107,6 +105,23 @@ class RegistryTest < Minitest::Test
       it 'decodes Base 64' do
         assert_equal "ABCDEF1234567890ABCDEF1234567890", registry.fetch("symmetric_encryption/key", encoding: :base64)
       end
+    end
+
+    private
+
+    def decompose(key, value, h = {})
+      path, name = File.split(key)
+      last       = path.split('/').reduce(h) do |target, path|
+        if path == ''
+          target
+        elsif target.key?(path)
+          target[path]
+        else
+          target[path] = {}
+        end
+      end
+      last[name] = value
+      h
     end
   end
 end

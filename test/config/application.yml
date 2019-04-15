@@ -2,10 +2,10 @@
 # These are for development and test only.
 
 #
-# Development - Local - Root: '/development/connect'
+# Development - Local - Root: '/development/my_application'
 #
 development:
-  connect:
+  my_application:
     symmetric_encryption:
       key:     QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=
       iv:      QUJDREVGMTIzNDU2Nzg5MA==
@@ -26,7 +26,7 @@ development:
       secret_key_base: somereallylongstring
 
 test:
-  connect:
+  my_application:
     symmetric_encryption:
       key:     QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=
       iv:      QUJDREVGMTIzNDU2Nzg5MA==

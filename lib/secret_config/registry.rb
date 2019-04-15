@@ -2,16 +2,11 @@ require 'base64'
 
 module SecretConfig
   # Centralized configuration with values stored in AWS System Manager Parameter Store
-  #
-  # Values are fetched from the central store on startup. Only those values starting with the specified
-  # root are loaded, supply multiple paths using the env var SECRETCONFIG_PATHS.
-  #
-  # Existing event mechanisms can be used to force a reload of the cached copy.
   class Registry
     attr_reader :provider
     attr_accessor :root
 
-    def initialize(root:, provider: :ssm)
+    def initialize(root:, provider:)
       # TODO: Validate root starts with /, etc
       @root     = root
       @provider = provider
@@ -21,7 +16,7 @@ module SecretConfig
     # Returns [Hash] a copy of the in memory configuration data.
     def configuration
       h = {}
-      registry.each_pair { |key, value| h[key] = value }
+      registry.each_pair { |k, v| decompose(k, v, h) }
       h
     end
 
@@ -54,7 +49,7 @@ module SecretConfig
 
     def refresh!
       h = {}
-      implementation.each(root) { |k, v| h[k] = v }
+      provider.each(root) { |k, v| h[k] = v }
       @registry = h
     end
 
@@ -66,8 +61,19 @@ module SecretConfig
       key.start_with?('/') ? key : "#{root}/#{key}"
     end
 
-    def implementation
-      @implementation ||= constantize_symbol(provider).new
+    def decompose(key, value, h = {})
+      path, name = File.split(key)
+      last       = path.split('/').reduce(h) do |target, path|
+        if path == ''
+          target
+        elsif target.key?(path)
+          target[path]
+        else
+          target[path] = {}
+        end
+      end
+      last[name] = value
+      h
     end
 
     def convert_encoding(encoding, value)
@@ -87,25 +93,11 @@ module SecretConfig
         value.to_f
       when :string
         value
+      when :boolean
+        %w[true 1 t].include?(value.to_s.downcase)
+      when :symbol
+        value.to_sym unless value.nil? || value.to_s.strip == ''
       end
-    end
-
-    def constantize_symbol(symbol, namespace = 'SecretConfig::Providers')
-      klass = "#{namespace}::#{camelize(symbol.to_s)}"
-      begin
-        Object.const_get(klass)
-      rescue NameError
-        raise(ArgumentError, "Could not convert symbol: #{symbol.inspect} to a class in: #{namespace}. Looking for: #{klass}")
-      end
-    end
-
-    # Borrow from Rails, when not running Rails
-    def camelize(term)
-      string = term.to_s
-      string = string.sub(/^[a-z\d]*/, &:capitalize)
-      string.gsub!(/(?:_|(\/))([a-z\d]*)/i) { "#{Regexp.last_match(1)}#{Regexp.last_match(2).capitalize}" }
-      string.gsub!('/'.freeze, '::'.freeze)
-      string
     end
 
   end
