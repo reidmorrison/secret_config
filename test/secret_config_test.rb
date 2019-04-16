@@ -11,13 +11,12 @@ class SecretConfigTest < Minitest::Test
     end
 
     before do
-      SecretConfig.root = root
-      SecretConfig.provider :file, file_name: file_name
+      SecretConfig.use :file, root: root, file_name: file_name
     end
 
     describe '#configuration' do
       it 'returns a copy of the config' do
-        assert_equal "127.0.0.1", SecretConfig.configuration.dig("development", "my_application", "mysql", "host")
+        assert_equal "127.0.0.1", SecretConfig.configuration.dig("mysql", "host")
       end
     end
 
@@ -36,6 +35,12 @@ class SecretConfigTest < Minitest::Test
     describe '#fetch' do
       it 'fetches values' do
         assert_equal "secret_config_development", SecretConfig.fetch("mysql/database")
+      end
+
+      it 'can be overridden by an environment variable' do
+        ENV['MYSQL_DATABASE'] = 'other'
+        assert_equal "other", SecretConfig.fetch("mysql/database")
+        ENV['MYSQL_DATABASE'] = nil
       end
     end
   end

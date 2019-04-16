@@ -1,4 +1,5 @@
 require 'base64'
+require 'concurrent-ruby'
 
 module SecretConfig
   # Centralized configuration with values stored in AWS System Manager Parameter Store
@@ -10,13 +11,18 @@ module SecretConfig
       # TODO: Validate root starts with /, etc
       @root     = root
       @provider = provider
+      @registry = Concurrent::Map.new
       refresh!
     end
 
     # Returns [Hash] a copy of the in memory configuration data.
-    def configuration
+    def configuration(relative: true, filters: SecretConfig.filters)
       h = {}
-      registry.each_pair { |k, v| decompose(k, v, h) }
+      registry.each_pair do |key, value|
+        key   = relative_key(key) if relative
+        value = filter_value(key, value, filters)
+        decompose(key, value, h)
+      end
       h
     end
 
@@ -43,22 +49,60 @@ module SecretConfig
       type == :string ? value : convert_type(type, value)
     end
 
+    # Set the value for a key in the centralized configuration store.
     def set(key:, value:, encrypt: true)
-      SSM.new(key_id: key_id).set(expand_key(key), value, encrypt: encrypt)
+      key = expand_key(key)
+      provider.set(key, value, encrypt: true)
+      registry[key] = value
     end
 
+    # Refresh the in-memory cached copy of the centralized configuration information.
+    # Environment variable values will take precendence over the central store values.
     def refresh!
-      h = {}
-      provider.each(root) { |k, v| h[k] = v }
-      @registry = h
+      existing_keys = registry.keys
+      updated_keys  = []
+      provider.each(root) do |key, value|
+        registry[key] = env_var_override(key, value)
+        updated_keys << key
+      end
+
+      # Remove keys deleted from the registry.
+      (existing_keys - updated_keys).each { |key| registry.delete(key) }
+
+      true
     end
 
     private
 
     attr_reader :registry
 
+    # Returns the value from an env var if it is present,
+    # Otherwise the value is returned unchanged.
+    def env_var_override(key, value)
+      env_var_name = relative_key(key).upcase.gsub('/', '_')
+      ENV[env_var_name] || value
+    end
+
+    # Add the root to the path if it is a relative path.
     def expand_key(key)
       key.start_with?('/') ? key : "#{root}/#{key}"
+    end
+
+    # Convert the key to a relative path by removing the
+    # root path.
+    def relative_key(key)
+      key.start_with?('/') ? key.sub("#{root}/", '') : key
+    end
+
+    def filter_value(key, value, filters)
+      return value unless filters
+
+      _, name = File.split(key)
+      filter = filters.any? do |filter|
+        filter.is_a?(Regexp) ? name =~ filter : name == filter
+      end
+
+      filter ? '[FILTERED]' : value
     end
 
     def decompose(key, value, h = {})

@@ -1,7 +1,7 @@
-require 'sync_attr'
 require 'secret_config/version'
 require 'secret_config/errors'
 require 'secret_config/registry'
+require 'secret_config/railtie' if defined?(Rails)
 
 # Centralized Configuration and Secrets Management for Ruby and Rails applications.
 module SecretConfig
@@ -23,45 +23,65 @@ module SecretConfig
     def_delegator :registry, :refresh!
   end
 
+  # Which provider to use along with any arguments
+  # The root will be overriden by env var `SECRET_CONFIG_ROOT` if present.
+  def self.use(provider, root: nil, **args)
+    @provider = create_provider(provider, args)
+    @root     = ENV["SECRET_CONFIG_ROOT"] || root
+    @registry = nil if @registry
+  end
+
   def self.root
-    @root ||= ENV["SECRET_CONFIG_ROOT"] ||
-      raise(UndefinedRootError, "Either set env var 'SECRET_CONFIG_ROOT' or call SecretConfig.root=")
-  end
-
-  def self.root=(root)
-    @root     = root
-    @registry = nil if @registry
-  end
-
-  # When provider is not supplied, returns the current provider instance
-  # When provider is supplied, sets the new provider and stores any arguments
-  def self.provider(provider = nil, **args)
-    if provider.nil?
-      return @provider ||= create_provider((ENV["SECRET_CONFIG_PROVIDER"] || :file).to_sym)
+    @root ||= begin
+      root = ENV["SECRET_CONFIG_ROOT"] || ENV["RAILS_ENV"]
+      raise(UndefinedRootError, "Either set env var 'SECRET_CONFIG_ROOT' or call SecretConfig.use") unless root
+      root = "/#{root}" unless root.start_with?('/')
+      root
     end
-
-    @provider      = create_provider(provider, args)
-    @registry      = nil if @registry
   end
 
-  def self.provider=(provider)
-    @provider = provider
-    @registry = nil if @registry
+  # Returns the current provider.
+  # If `SecretConfig.use` was not called previously it automatically use the file based provider.
+  def self.provider
+    @provider ||= begin
+      create_provider(:file)
+    end
   end
 
   def self.registry
     @registry ||= SecretConfig::Registry.new(root: root, provider: provider)
   end
 
+  # Filters to apply when returning the configuration
+  def self.filters
+    @filters
+  end
+
+  def self.filters=(filters)
+    @filters = filters
+  end
+
+  # Check the environment variables for a matching key and override the value returned from
+  # the central registry.
+  def self.check_env_var?
+    @check_env_var
+  end
+
+  def self.check_env_var=(check_env_var)
+    @check_env_var = check_env_var
+  end
+
   private
 
+  @check_env_var = true
+  @filters       = [/password/, 'key', /secret_key/]
+
+  # Create a new provider instance unless it is alread a provider instance.
   def self.create_provider(provider, args = nil)
+    return provider if provider.respond_to?(:each) && provider.respond_to?(:set)
+
     klass = constantize_symbol(provider)
-    if args && args.size > 0
-      klass.new(**args)
-    else
-      klass.new
-    end
+    args && args.size > 0 ? klass.new(**args) : klass.new
   end
 
   def implementation

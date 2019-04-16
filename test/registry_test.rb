@@ -36,7 +36,15 @@ class RegistryTest < Minitest::Test
 
     describe '#configuration' do
       it 'returns a copy of the config' do
-        assert_equal "127.0.0.1", registry.configuration.dig("development", "my_application", "mysql", "host")
+        assert_equal "127.0.0.1", registry.configuration.dig("mysql", "host")
+      end
+
+      it 'filters passwords' do
+        assert_equal "[FILTERED]", registry.configuration.dig("mysql", "password")
+      end
+
+      it 'filters key' do
+        assert_equal "[FILTERED]", registry.configuration.dig("symmetric_encryption", "key")
       end
     end
 

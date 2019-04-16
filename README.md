@@ -136,6 +136,89 @@ production:
 
 Since the secrets are externalized the configuration between environments is simpler.
 
+## Configuration
+
+Add the following line to Gemfile
+
+    gem "secret_config"
+
+Out of the box Secret Config will look in the local file system for the file `config/application.yml`
+as covered above. By default it will use env var `RAILS_ENV` to define the root path to look under for settings.
+
+The default settings are great for getting started in development and test, but should not be used in production. 
+
+Add the setting to `config/environments/production.rb` to make it fetch its settings from 
+AWS System Manager Parameter Store:
+
+~~~ruby
+Rails.application.configure do
+  # Read configuration from AWS Parameter Store
+  config.secret_config.use :ssm, root: '/production/my_application'
+end
+~~~
+
+`root` is the path from which the configuration data will be read. This path uniquely identifies the
+configuration for this instance of the application.
+
+If we need 2 completely separate instances of the application running in a single AWS account then we could use
+multiple paths. For example:
+
+    /production1/my_application
+    /production2/my_application
+    
+    /production/instance1/my_application
+    /production/instance2/my_application
+    
+The root path is completely flexible, but must be unique for every AWS account under which the application will run.
+The same root path can be used in different AWS accounts though. It is also not replicated across regions.
+
+When writing settings to the parameter store, it is recommended to use a custom KMS key to encrypt the values.
+To supply the key to encrypt the values with, add the `key_id` parameter: 
+
+~~~ruby
+Rails.application.configure do
+  # Read configuration from AWS Parameter Store
+  config.secret_config.use :ssm,
+                           key_id: 'alias/production/myapplication',
+                           root: '/production/my_application'
+end
+~~~
+
+Note: The relevant KMS key must be created first prior to using it here.
+
+The `key_id` is only used when writing settings to the AWS Parameter store and can be left off when that instance
+will only read from the parameter store.
+
+### Authorization
+
+The following policy needs to be added to the AMI Group under which the application will be running:
+
+~~~json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:PutParameter",
+                "ssm:GetParametersByPath",
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+~~~
+
+The above policy restricts read and write access to just the Parameter Store capabilities of AWS System Manager.
+
+These additional Actions are not used by Secret Config, but may be useful for anyone using the AWS Console directly
+to view and modify parameters:
+- `ssm:DescribeParameters`
+- `ssm:GetParameterHistory`
+- `ssm:GetParameters`
+- `ssm:GetParameter`
+
 ## Versioning
 
 This project adheres to [Semantic Versioning](http://semver.org/).

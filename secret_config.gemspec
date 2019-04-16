@@ -18,6 +18,5 @@ Gem::Specification.new do |s|
   s.license               = 'Apache-2.0'
   s.required_ruby_version = '>= 2.2'
   s.add_dependency 'concurrent-ruby'
-  s.add_dependency 'sync_attr'
   s.add_dependency 'aws-sdk-ssm'
 end
