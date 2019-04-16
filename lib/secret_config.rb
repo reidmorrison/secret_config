@@ -1,3 +1,4 @@
+require 'forwardable'
 require 'secret_config/version'
 require 'secret_config/errors'
 require 'secret_config/registry'
