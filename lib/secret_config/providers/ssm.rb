@@ -1,4 +1,8 @@
-require 'aws-sdk-ssm'
+begin
+  require 'aws-sdk-ssm'
+rescue LoadError => exc
+  raise(LoadError, "Install gem 'aws-sdk-ssm' to use AWS Parameter Store: #{exc.message}")
+end
 
 module SecretConfig
   module Providers

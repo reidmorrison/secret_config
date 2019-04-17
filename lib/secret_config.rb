@@ -34,6 +34,7 @@ module SecretConfig
   def self.root
     @root ||= begin
       root = ENV["SECRET_CONFIG_ROOT"] || ENV["RAILS_ENV"]
+      root = Rails.env if root.nil? && defined?(Rails) && Rails.respond_to?(:env)
       raise(UndefinedRootError, "Either set env var 'SECRET_CONFIG_ROOT' or call SecretConfig.use") unless root
       root = "/#{root}" unless root.start_with?('/')
       root
