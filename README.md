@@ -78,11 +78,24 @@ to flatten everything into a single level.
 
 Note: Do not put any production credentials into this file.
 
-### Usage
+### Environment Variables
+
+Any of the above values can be overridden with an environment variable.
+
+To overwrite any of these settings with an environment variable:
+
+* Join the keys together with an '_'
+* Convert to uppercase
+
+For example, `mysql/host` can be overridden with the env var:
+
+    export MYSQL_HOST=test.server
+
+### Applying to existing config files
 
 Go through all the configuration files and look for sensitive data such as passwords:
 
-Example `database.yml`:
+Example, an unchanged common `database.yml`:
 
 ~~~yaml
 defaults: &defaults
@@ -135,6 +148,45 @@ production:
 ~~~
 
 Since the secrets are externalized the configuration between environments is simpler.
+
+### Replacing custom config files
+
+When writing new components or gems, instead of requiring a proprietary config file, refer
+to the settings programmatically:
+
+For example, somewhere in your codebase you need a persistent http connection:
+
+~~~ruby
+  def http_client
+    @http_client ||=
+      PersistentHTTP.new(
+        name:         'HTTPClient',
+        url:          SecretConfig.fetch('http_client/url'),
+        logger:       logger,
+        pool_size:    SecretConfig.fetch('http_client/pool_size', type: :integer, default: 10),
+        warn_timeout: SecretConfig.fetch('http_client/warn_timeout', type: :float, default: 0.25),
+        open_timeout: SecretConfig.fetch('http_client/open_timeout', type: :float, default: 30),
+        read_timeout: SecretConfig.fetch('http_client/read_timeout', type: :float, default: 30),
+        force_retry:  true
+      )
+  end
+~~~
+
+Then the application that uses the above library / gem just needs to add the relevant entries to their
+`application.rb` file:
+
+~~~yaml
+http_client:
+  url:          https://test.example.com  
+  pool_size:    20
+  open_timeout: secret_configrules
+~~~
+
+This avoids a custom config file just for the above library.
+
+Additionally the values can be overridden with environment variables at any time:
+
+    export HTTP_CLIENT_URL=https://production.example.com  
 
 ## Configuration
 
