@@ -143,7 +143,7 @@ Add the following line to Gemfile
     gem "secret_config"
 
 Out of the box Secret Config will look in the local file system for the file `config/application.yml`
-as covered above. By default it will use env var `RAILS_ENV` to define the root path to look under for settings.
+as covered above. By default it will use env var `RAILS_ENV` to define the path to look under for settings.
 
 The default settings are great for getting started in development and test, but should not be used in production. 
 
@@ -153,11 +153,11 @@ AWS System Manager Parameter Store:
 ~~~ruby
 Rails.application.configure do
   # Read configuration from AWS Parameter Store
-  config.secret_config.use :ssm, root: '/production/my_application'
+  config.secret_config.use :ssm, path: '/production/my_application'
 end
 ~~~
 
-`root` is the path from which the configuration data will be read. This path uniquely identifies the
+`path` is the path from which the configuration data will be read. This path uniquely identifies the
 configuration for this instance of the application.
 
 If we need 2 completely separate instances of the application running in a single AWS account then we could use
@@ -169,8 +169,8 @@ multiple paths. For example:
     /production/instance1/my_application
     /production/instance2/my_application
     
-The root path is completely flexible, but must be unique for every AWS account under which the application will run.
-The same root path can be used in different AWS accounts though. It is also not replicated across regions.
+The `path` is completely flexible, but must be unique for every AWS account under which the application will run.
+The same `path` can be used in different AWS accounts though. It is also not replicated across regions.
 
 When writing settings to the parameter store, it is recommended to use a custom KMS key to encrypt the values.
 To supply the key to encrypt the values with, add the `key_id` parameter: 
@@ -180,7 +180,7 @@ Rails.application.configure do
   # Read configuration from AWS Parameter Store
   config.secret_config.use :ssm,
                            key_id: 'alias/production/myapplication',
-                           root: '/production/my_application'
+                           path: '/production/my_application'
 end
 ~~~
 
@@ -191,7 +191,7 @@ will only read from the parameter store.
 
 ### Authorization
 
-The following policy needs to be added to the AMI Group under which the application will be running:
+The following policy needs to be added to the IAM Group under which the application will be running:
 
 ~~~json
 {
@@ -218,6 +218,56 @@ to view and modify parameters:
 - `ssm:GetParameterHistory`
 - `ssm:GetParameters`
 - `ssm:GetParameter`
+
+## Command Line Interface
+
+Secret Config has a command line interface for exporting, importing and copying between paths in the registry.
+
+~~~
+secret_config [options]
+    -e, --export [FILE_NAME]         Export configuration to a file or stdout if no file_name supplied.
+    -i, --import [FILE_NAME]         Import configuration from a file or stdin if no file_name supplied.
+    -c, --copy SOURCE_PATH           Import configuration from a file or stdin if no file_name supplied.
+    -p, --path PATH                  Path to import from / export to.
+    -P, --provider PROVIDER          Provider to use. [ssm | file]. Default: ssm
+    -U, --no-filter                  Do not filter passwords and keys.
+    -k, --key KEY_ID | KEY_ALIAS     AWS KMS Key id or Key Alias to use when importing configuration values. Default: AWS Default key.
+    -r, --region REGION              AWS Region to use. Default: AWS_REGION env var.
+    -R, --random_size INTEGER        Size to use when generating random values. Whenever $random is encountered during an import. Default: 32
+    -v, --version                    Display Symmetric Encryption version.
+    -h, --help                       Prints this help.
+~~~
+
+### CLI Examples
+
+Export from a path in AWS SSM Parameter Store to a yaml file, where passwords are filtered:
+
+    secret_config --export test.yml --path /test/my_application
+
+Export from a path in AWS SSM Parameter Store to a yaml file, _without_ filtering out passwords:
+
+    secret_config --export test.yml --path /test/my_application --no-filter
+
+Export from a path in AWS SSM Parameter Store to a json file, where passwords are filtered:
+
+    secret_config --export test.json --path /test/my_application
+
+Import a yaml file, into a path in AWS SSM Parameter Store:
+
+    secret_config --import test.yml --path /production/my_application
+
+Import a yaml file, into a path in AWS SSM Parameter Store, using a custom KMS key to encrypt the values:
+
+    secret_config --import test.yml --path /production/my_application --key_id "arn:aws:kms:us-east-1:23643632463:key/UUID"
+
+Copy configuration from one path in AWS SSM Parameter Store to another path in AWS SSM Parameter Store:
+
+    secret_config --copy /test/my_application --path /production/my_application
+
+During an `import` or `copy` if any of the source values consist only of `$random`, 
+they will be replaced with a secure 32 byte random value.
+This is deal for when a secure random password needs to be generated. 
+Use `--random_size` to adjust the length of the randomized string.
 
 ## Versioning
 

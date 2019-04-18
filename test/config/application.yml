@@ -2,7 +2,7 @@
 # These are for development and test only.
 
 #
-# Development - Local - Root: '/development/my_application'
+# Development - Local - Root: '/test/my_application'
 #
 development:
   my_application:

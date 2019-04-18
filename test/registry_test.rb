@@ -6,8 +6,8 @@ class RegistryTest < Minitest::Test
       File.join(File.dirname(__FILE__), 'config', 'application.yml')
     end
 
-    let :root do
-      "/development/my_application"
+    let :path do
+      "/test/my_application"
     end
 
     let :provider do
@@ -15,22 +15,22 @@ class RegistryTest < Minitest::Test
     end
 
     let :registry do
-      SecretConfig::Registry.new(root: root, provider: provider)
+      SecretConfig::Registry.new(path: path, provider: provider)
     end
 
     let :expected do
       {
-        "/development/my_application/mongo/database"               => "secret_config_development",
-        "/development/my_application/mongo/primary"                => "127.0.0.1:27017",
-        "/development/my_application/mongo/secondary"              => "127.0.0.1:27018",
-        "/development/my_application/mysql/database"               => "secret_config_development",
-        "/development/my_application/mysql/password"               => "secret_configrules",
-        "/development/my_application/mysql/username"               => "secret_config",
-        "/development/my_application/mysql/host"                   => "127.0.0.1",
-        "/development/my_application/secrets/secret_key_base"      => "somereallylongstring",
-        "/development/my_application/symmetric_encryption/key"     => "QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=",
-        "/development/my_application/symmetric_encryption/version" => 2,
-        "/development/my_application/symmetric_encryption/iv"      => "QUJDREVGMTIzNDU2Nzg5MA=="
+        "/test/my_application/mongo/database"               => "secret_config_test",
+        "/test/my_application/mongo/primary"                => "127.0.0.1:27017",
+        "/test/my_application/mongo/secondary"              => "127.0.0.1:27018",
+        "/test/my_application/mysql/database"               => "secret_config_test",
+        "/test/my_application/mysql/password"               => "secret_configrules",
+        "/test/my_application/mysql/username"               => "secret_config",
+        "/test/my_application/mysql/host"                   => "127.0.0.1",
+        "/test/my_application/secrets/secret_key_base"      => "somereallylongteststring",
+        "/test/my_application/symmetric_encryption/key"     => "QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=",
+        "/test/my_application/symmetric_encryption/version" => 2,
+        "/test/my_application/symmetric_encryption/iv"      => "QUJDREVGMTIzNDU2Nzg5MA=="
       }
     end
 
@@ -51,7 +51,7 @@ class RegistryTest < Minitest::Test
     describe '#key?' do
       it 'has key' do
         expected.each_pair do |key, value|
-          key = key.sub("#{root}/", "")
+          key = key.sub("#{path}/", "")
           assert registry.key?(key), "Path: #{key}"
         end
       end
@@ -61,14 +61,14 @@ class RegistryTest < Minitest::Test
       end
 
       it 'returns nil with missing full key' do
-        refute registry.key?("/development/invalid/path")
+        refute registry.key?("/test/invalid/path")
       end
     end
 
     describe '#[]' do
       it 'returns values' do
         expected.each_pair do |key, value|
-          key = key.sub("#{root}/", "")
+          key = key.sub("#{path}/", "")
           assert_equal value, registry[key], "Path: #{key}"
         end
       end
@@ -78,14 +78,14 @@ class RegistryTest < Minitest::Test
       end
 
       it 'returns nil with missing full key' do
-        assert_nil registry["/development/invalid/path"]
+        assert_nil registry["/test/invalid/path"]
       end
     end
 
     describe '#fetch' do
       it 'returns values' do
         expected.each_pair do |key, value|
-          key = key.sub("#{root}/", "")
+          key = key.sub("#{path}/", "")
           assert_equal value, registry.fetch(key), "Path: #{key}"
         end
       end
@@ -98,12 +98,12 @@ class RegistryTest < Minitest::Test
 
       it 'returns nil with missing full key' do
         assert_raises SecretConfig::MissingMandatoryKey do
-          registry.fetch("/development/invalid/path")
+          registry.fetch("/test/invalid/path")
         end
       end
 
       it 'returns default with missing key' do
-        assert_equal "default_value", registry.fetch("/development/invalid/path", default: "default_value")
+        assert_equal "default_value", registry.fetch("/test/invalid/path", default: "default_value")
       end
 
       it 'converts to integer' do

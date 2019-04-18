@@ -5,20 +5,21 @@ module SecretConfig
   # Centralized configuration with values stored in AWS System Manager Parameter Store
   class Registry
     attr_reader :provider
-    attr_accessor :root
+    attr_accessor :path
 
-    def initialize(root:, provider:)
-      # TODO: Validate root starts with /, etc
-      @root     = root
-      @provider = provider
-      @registry = Concurrent::Map.new
+    def initialize(path: nil, provider: :file, provider_args: nil)
+      @path = path || default_path
+      raise(UndefinedRootError, 'Root must start with /') unless @path.start_with?('/')
+
+      @provider = create_provider(provider, provider_args)
+      @cache    = Concurrent::Map.new
       refresh!
     end
 
     # Returns [Hash] a copy of the in memory configuration data.
     def configuration(relative: true, filters: SecretConfig.filters)
       h = {}
-      registry.each_pair do |key, value|
+      cache.each_pair do |key, value|
         key   = relative_key(key) if relative
         value = filter_value(key, value, filters)
         decompose(key, value, h)
@@ -28,19 +29,19 @@ module SecretConfig
 
     # Returns [String] configuration value for the supplied key, or nil when missing.
     def [](key)
-      registry[expand_key(key)]
+      cache[expand_key(key)]
     end
 
     # Returns [String] configuration value for the supplied key, or nil when missing.
     def key?(key)
-      registry.key?(expand_key(key))
+      cache.key?(expand_key(key))
     end
 
     # Returns [String] configuration value for the supplied key
     def fetch(key, default: nil, type: :string, encoding: nil)
       value = self[key]
       if value.nil?
-        raise(MissingMandatoryKey, "Missing configuration value for #{root}/#{key}") unless default
+        raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}") unless default
 
         value = default.respond_to?(:call) ? default.call : default
       end
@@ -53,28 +54,28 @@ module SecretConfig
     def set(key:, value:, encrypt: true)
       key = expand_key(key)
       provider.set(key, value, encrypt: true)
-      registry[key] = value
+      cache[key] = value
     end
 
     # Refresh the in-memory cached copy of the centralized configuration information.
     # Environment variable values will take precendence over the central store values.
     def refresh!
-      existing_keys = registry.keys
+      existing_keys = cache.keys
       updated_keys  = []
-      provider.each(root) do |key, value|
-        registry[key] = env_var_override(key, value)
+      provider.each(path) do |key, value|
+        cache[key] = env_var_override(key, value)
         updated_keys << key
       end
 
-      # Remove keys deleted from the registry.
-      (existing_keys - updated_keys).each { |key| registry.delete(key) }
+      # Remove keys deleted from the central registry.
+      (existing_keys - updated_keys).each { |key| provider.delete(key) }
 
       true
     end
 
     private
 
-    attr_reader :registry
+    attr_reader :cache
 
     # Returns the value from an env var if it is present,
     # Otherwise the value is returned unchanged.
@@ -83,22 +84,21 @@ module SecretConfig
       ENV[env_var_name] || value
     end
 
-    # Add the root to the path if it is a relative path.
+    # Add the path to the path if it is a relative path.
     def expand_key(key)
-      key.start_with?('/') ? key : "#{root}/#{key}"
+      key.start_with?('/') ? key : "#{path}/#{key}"
     end
 
-    # Convert the key to a relative path by removing the
-    # root path.
+    # Convert the key to a relative path by removing the path.
     def relative_key(key)
-      key.start_with?('/') ? key.sub("#{root}/", '') : key
+      key.start_with?('/') ? key.sub("#{path}/", '') : key
     end
 
     def filter_value(key, value, filters)
       return value unless filters
 
       _, name = File.split(key)
-      filter = filters.any? do |filter|
+      filter  = filters.any? do |filter|
         filter.is_a?(Regexp) ? name =~ filter : name == filter
       end
 
@@ -144,5 +144,21 @@ module SecretConfig
       end
     end
 
+    # Create a new provider instance unless it is alread a provider instance.
+    def create_provider(provider, args = nil)
+      return provider if provider.respond_to?(:each) && provider.respond_to?(:set)
+
+      klass = Utils.constantize_symbol(provider)
+      args && args.size > 0 ? klass.new(**args) : klass.new
+    end
+
+    def default_path
+      path = ENV["SECRET_CONFIG_PATH"] || ENV["RAILS_ENV"]
+      path = Rails.env if path.nil? && defined?(Rails) && Rails.respond_to?(:env)
+
+      raise(UndefinedRootError, "Either set env var 'SECRET_CONFIG_PATH' or call SecretConfig.use") unless path
+
+      path.start_with?('/') ? path : "/#{path}"
+    end
   end
 end

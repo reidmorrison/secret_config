@@ -11,6 +11,9 @@ module SecretConfig
     autoload :Ssm, 'secret_config/providers/ssm'
   end
 
+  autoload :CLI, 'secret_config/cli'
+  autoload :Utils, 'secret_config/utils'
+
   class << self
     extend Forwardable
 
@@ -25,33 +28,16 @@ module SecretConfig
   end
 
   # Which provider to use along with any arguments
-  # The root will be overriden by env var `SECRET_CONFIG_ROOT` if present.
-  def self.use(provider, root: nil, **args)
-    @provider = create_provider(provider, args)
-    @root     = ENV["SECRET_CONFIG_ROOT"] || root
-    @registry = nil if @registry
+  # The path will be overriden by env var `SECRET_CONFIG_PATH` if present.
+  def self.use(provider, path: nil, **args)
+    path      ||= ENV["SECRET_CONFIG_PATH"]
+    @registry = SecretConfig::Registry.new(path: path, provider: provider, provider_args: args)
   end
 
-  def self.root
-    @root ||= begin
-      root = ENV["SECRET_CONFIG_ROOT"] || ENV["RAILS_ENV"]
-      root = Rails.env if root.nil? && defined?(Rails) && Rails.respond_to?(:env)
-      raise(UndefinedRootError, "Either set env var 'SECRET_CONFIG_ROOT' or call SecretConfig.use") unless root
-      root = "/#{root}" unless root.start_with?('/')
-      root
-    end
-  end
-
-  # Returns the current provider.
-  # If `SecretConfig.use` was not called previously it automatically use the file based provider.
-  def self.provider
-    @provider ||= begin
-      create_provider(:file)
-    end
-  end
-
+  # Returns the global registry.
+  # Unless `.use` was called above, it will default to a file provider.
   def self.registry
-    @registry ||= SecretConfig::Registry.new(root: root, provider: provider)
+    @registry ||= SecretConfig::Registry.new
   end
 
   # Filters to apply when returning the configuration
@@ -77,34 +63,4 @@ module SecretConfig
 
   @check_env_var = true
   @filters       = [/password/, 'key', /secret_key/]
-
-  # Create a new provider instance unless it is alread a provider instance.
-  def self.create_provider(provider, args = nil)
-    return provider if provider.respond_to?(:each) && provider.respond_to?(:set)
-
-    klass = constantize_symbol(provider)
-    args && args.size > 0 ? klass.new(**args) : klass.new
-  end
-
-  def implementation
-    @implementation ||= constantize_symbol(provider).new
-  end
-
-  def self.constantize_symbol(symbol, namespace = 'SecretConfig::Providers')
-    klass = "#{namespace}::#{camelize(symbol.to_s)}"
-    begin
-      Object.const_get(klass)
-    rescue NameError
-      raise(ArgumentError, "Could not convert symbol: #{symbol.inspect} to a class in: #{namespace}. Looking for: #{klass}")
-    end
-  end
-
-  # Borrow from Rails, when not running Rails
-  def self.camelize(term)
-    string = term.to_s
-    string = string.sub(/^[a-z\d]*/, &:capitalize)
-    string.gsub!(/(?:_|(\/))([a-z\d]*)/i) { "#{Regexp.last_match(1)}#{Regexp.last_match(2).capitalize}" }
-    string.gsub!('/'.freeze, '::'.freeze)
-    string
-  end
 end

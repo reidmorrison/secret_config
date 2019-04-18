@@ -6,12 +6,12 @@ class SecretConfigTest < Minitest::Test
       File.join(File.dirname(__FILE__), 'config', 'application.yml')
     end
 
-    let :root do
-      "/development/my_application"
+    let :path do
+      "/test/my_application"
     end
 
     before do
-      SecretConfig.use :file, root: root, file_name: file_name
+      SecretConfig.use :file, path: path, file_name: file_name
     end
 
     describe '#configuration' do
@@ -28,19 +28,24 @@ class SecretConfigTest < Minitest::Test
 
     describe '#[]' do
       it 'returns values' do
-        assert_equal "secret_config_development", SecretConfig["mysql/database"]
+        assert_equal "secret_config_test", SecretConfig["mysql/database"]
       end
     end
 
     describe '#fetch' do
+      after do
+        ENV['MYSQL_DATABASE'] = nil
+      end
+
       it 'fetches values' do
-        assert_equal "secret_config_development", SecretConfig.fetch("mysql/database")
+        assert_equal "secret_config_test", SecretConfig.fetch("mysql/database")
       end
 
       it 'can be overridden by an environment variable' do
         ENV['MYSQL_DATABASE'] = 'other'
+
+        SecretConfig.use :file, path: path, file_name: file_name
         assert_equal "other", SecretConfig.fetch("mysql/database")
-        ENV['MYSQL_DATABASE'] = nil
       end
     end
   end

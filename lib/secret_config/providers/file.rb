@@ -20,7 +20,7 @@ module SecretConfig
 
         raise(ConfigError, "Path #{paths.join(".")} not found in file: #{file_name}") unless settings
 
-        flatten_each(path, settings, &block)
+        Utils.flatten_each(settings, path, &block)
         nil
       end
 
@@ -28,18 +28,6 @@ module SecretConfig
         raise NotImplementedError
       end
 
-      private
-
-      def flatten_each(path, hash, &block)
-        hash.each_pair do |key, value|
-          if value.is_a?(Hash)
-            flatten_each("#{path}/#{key}", value, &block)
-          else
-            key = "#{path}/#{key}" unless key.start_with?('/')
-            yield(key, value)
-          end
-        end
-      end
     end
   end
 end

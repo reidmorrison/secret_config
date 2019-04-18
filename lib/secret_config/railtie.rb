@@ -5,7 +5,7 @@ module SecretConfig
     # @example Set up configuration in the Rails app.
     #   module MyApplication
     #     class Application < Rails::Application
-    #       config.secret_config.use :file, root: '/development'
+    #       config.secret_config.use :file, path: '/development'
     #     end
     #   end
     config.secret_config = SecretConfig
