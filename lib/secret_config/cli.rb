@@ -4,6 +4,7 @@ require 'erb'
 require 'yaml'
 require 'json'
 require 'securerandom'
+require 'irb'
 
 module SecretConfig
   class CLI
@@ -11,6 +12,7 @@ module SecretConfig
                 :export, :no_filter,
                 :import, :key_id, :random_size, :prune, :overwrite,
                 :copy_path,
+                :console,
                 :show_version
 
     PROVIDERS = %i[ssm].freeze
@@ -32,6 +34,7 @@ module SecretConfig
       @replace      = false
       @copy_path    = nil
       @show_version = false
+      @console      = false
 
       if argv.empty?
         puts parser
@@ -44,6 +47,8 @@ module SecretConfig
       if show_version
         puts "Secret Config v#{VERSION}"
         puts "Region: #{region}"
+      elsif console
+        run_console
       elsif export
         run_export(export, filtered: !no_filter)
       elsif import
@@ -75,6 +80,10 @@ module SecretConfig
 
         opts.on '-c', '--copy SOURCE_PATH', 'Import configuration from a file or stdin if no file_name supplied.' do |path|
           @copy_path = path
+        end
+
+        opts.on '-i', '--console', 'Start interactive console.' do
+          @console = true
         end
 
         opts.on '-p', '--path PATH', 'Path to import from / export to.' do |path|
@@ -159,6 +168,10 @@ module SecretConfig
       set_config(config, target_path)
 
       puts "Copied #{source_path} to #{target_path} using #{provider}"
+    end
+
+    def run_console
+      IRB.start
     end
 
     def set_config(config, path)

@@ -179,7 +179,7 @@ Then the application that uses the above library / gem just needs to add the rel
 http_client:
   url:          https://test.example.com  
   pool_size:    20
-  open_timeout: secret_configrules
+  read_timeout: 300
 ~~~
 
 This avoids a custom config file just for the above library.
