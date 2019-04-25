@@ -106,6 +106,10 @@ class RegistryTest < Minitest::Test
         assert_equal "default_value", registry.fetch("/test/invalid/path", default: "default_value")
       end
 
+      it 'returns default with false value' do
+        assert_equal false, registry.fetch("/test/invalid/path", default: false, type: :boolean)
+      end
+
       it 'converts to integer' do
         assert_equal 2, registry.fetch("symmetric_encryption/version", type: :integer)
       end

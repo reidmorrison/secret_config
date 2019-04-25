@@ -41,7 +41,7 @@ module SecretConfig
     def fetch(key, default: nil, type: :string, encoding: nil)
       value = self[key]
       if value.nil?
-        raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}") unless default
+        raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}") if default.nil?
 
         value = default.respond_to?(:call) ? default.call : default
       end
