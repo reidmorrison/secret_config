@@ -18,7 +18,7 @@ module SecretConfig
         paths    = path.sub(/\A\/*/, '').sub(/\/*\Z/, '').split("/")
         settings = config.dig(*paths)
 
-        raise(ConfigError, "Path #{paths.join(".")} not found in file: #{file_name}") unless settings
+        raise(ConfigurationError, "Path #{paths.join(".")} not found in file: #{file_name}") unless settings
 
         Utils.flatten_each(settings, path, &block)
         nil
