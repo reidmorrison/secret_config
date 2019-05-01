@@ -17,5 +17,7 @@ Gem::Specification.new do |s|
   s.test_files            = Dir['test/**/*']
   s.license               = 'Apache-2.0'
   s.required_ruby_version = '>= 2.2'
+  s.bindir                = 'bin'
+  s.executables           = ['secret_config']
   s.add_dependency 'concurrent-ruby'
 end
