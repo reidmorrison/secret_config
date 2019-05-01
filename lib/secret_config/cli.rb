@@ -177,7 +177,9 @@ module SecretConfig
     def set_config(config, path)
       # TODO: prune, replace
       Utils.flatten_each(config, path) do |key, value|
-        value = random_password if value.strip == '$random'
+        next if value.nil?
+
+        value = random_password if value.to_s.strip == '$random'
         puts "Setting: #{key}"
         provider_instance.set(key, value)
       end
