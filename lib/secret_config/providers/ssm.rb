@@ -7,7 +7,7 @@ end
 module SecretConfig
   module Providers
     # Use the AWS System Manager Parameter Store for Centralized Configuration / Secrets Management
-    class Ssm
+    class Ssm < Provider
       attr_reader :client, :key_id
 
       def initialize(key_id: nil)
@@ -39,6 +39,10 @@ module SecretConfig
           key_id:    key_id,
           overwrite: true
         )
+      end
+
+      def delete(key)
+        client.delete_parameter(name: key)
       end
     end
   end

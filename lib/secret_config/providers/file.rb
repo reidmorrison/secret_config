@@ -4,7 +4,7 @@ require 'erb'
 module SecretConfig
   module Providers
     # Read configuration from a local file
-    class File
+    class File < Provider
       attr_reader :file_name
 
       def initialize(file_name: "config/application.yml")
@@ -18,16 +18,11 @@ module SecretConfig
         paths    = path.sub(/\A\/*/, '').sub(/\/*\Z/, '').split("/")
         settings = config.dig(*paths)
 
-        raise(ConfigurationError, "Path #{paths.join(".")} not found in file: #{file_name}") unless settings
+        raise(ConfigurationError, "Path #{paths.join("/")} not found in file: #{file_name}") unless settings
 
         Utils.flatten_each(settings, path, &block)
         nil
       end
-
-      def set(key, value)
-        raise NotImplementedError
-      end
-
     end
   end
 end

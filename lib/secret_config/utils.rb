@@ -1,12 +1,20 @@
 module SecretConfig
   module Utils
-    # Takes a hierarchical structure and flattens it to a single level
-    # If path is supplied it is prepended to every key returned
+    # Takes a hierarchical structure and flattens it to a single level.
+    # If path is supplied it is prepended to every key returned.
     def self.flatten_each(hash, path = nil, &block)
       hash.each_pair do |key, value|
         name = path.nil? ? key : "#{path}/#{key}"
         value.is_a?(Hash) ? flatten_each(value, name, &block) : yield(name, value)
       end
+    end
+
+    # Takes a hierarchical structure and flattens it to a single level hash.
+    # If path is supplied it is prepended to every key returned.
+    def self.flatten(hash, path = nil)
+      h = {}
+      flatten_each(hash, path) { |key, value| h[key] = value }
+      h
     end
 
     def self.constantize_symbol(symbol, namespace = 'SecretConfig::Providers')

@@ -7,11 +7,14 @@ module SecretConfig
     attr_reader :provider
     attr_accessor :path
 
-    def initialize(path: nil, provider: :file, provider_args: nil)
-      @path = path || default_path
+    def initialize(path: nil, provider: nil, provider_args: nil)
+      @path = default_path(path)
       raise(UndefinedRootError, 'Root must start with /') unless @path.start_with?('/')
 
-      @provider = create_provider(provider, provider_args)
+      resolved_provider = default_provider(provider)
+      provider_args     = nil if resolved_provider != provider
+
+      @provider = create_provider(resolved_provider, provider_args)
       @cache    = Concurrent::Map.new
       refresh!
     end
@@ -152,13 +155,21 @@ module SecretConfig
       args && args.size > 0 ? klass.new(**args) : klass.new
     end
 
-    def default_path
-      path = ENV["SECRET_CONFIG_PATH"] || ENV["RAILS_ENV"]
+    def default_path(configured_path)
+      path = ENV["SECRET_CONFIG_PATH"] || configured_path || ENV["RAILS_ENV"]
       path = Rails.env if path.nil? && defined?(Rails) && Rails.respond_to?(:env)
 
       raise(UndefinedRootError, "Either set env var 'SECRET_CONFIG_PATH' or call SecretConfig.use") unless path
 
       path.start_with?('/') ? path : "/#{path}"
+    end
+
+    def default_provider(provider)
+      provider = (ENV["SECRET_CONFIG_PROVIDER"] || provider || 'file')
+
+      return provider if provider.respond_to?(:each) && provider.respond_to?(:set)
+
+      provider.to_s.downcase.to_sym
     end
   end
 end

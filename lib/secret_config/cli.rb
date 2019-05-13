@@ -11,7 +11,7 @@ module SecretConfig
     attr_reader :path, :region, :provider,
                 :export, :no_filter,
                 :import, :key_id, :random_size, :prune, :overwrite,
-                :copy_path,
+                :copy_path, :diff,
                 :console,
                 :show_version
 
@@ -35,6 +35,7 @@ module SecretConfig
       @copy_path    = nil
       @show_version = false
       @console      = false
+      @diff         = false
 
       if argv.empty?
         puts parser
@@ -51,10 +52,14 @@ module SecretConfig
         run_console
       elsif export
         run_export(export, filtered: !no_filter)
+      elsif import && prune
+        run_import_and_prune(import)
       elsif import
         run_import(import)
       elsif copy_path
         run_copy(copy_path, path)
+      elsif diff
+        run_diff(diff)
       else
         puts parser
       end
@@ -78,11 +83,15 @@ module SecretConfig
           @import = file_name || STDIN
         end
 
-        opts.on '-c', '--copy SOURCE_PATH', 'Import configuration from a file or stdin if no file_name supplied.' do |path|
+        opts.on '-C', '--copy SOURCE_PATH', 'Import configuration from a file or stdin if no file_name supplied.' do |path|
           @copy_path = path
         end
 
-        opts.on '-i', '--console', 'Start interactive console.' do
+        opts.on '-D', '--diff [FILE_NAME]', 'Compare configuration from a file or stdin if no file_name supplied.' do |file_name|
+          @diff = file_name
+        end
+
+        opts.on '-c', '--console', 'Start interactive console.' do
           @console = true
         end
 
@@ -98,14 +107,9 @@ module SecretConfig
           @no_filter = true
         end
 
-        # TODO:
-        # opts.on '-Q', '--prune', 'During import delete all existing keys for which their is no key in the import file' do
-        #   @prune = true
-        # end
-        #
-        # opts.on '-r', '--replace', 'During import replace existing keys if present' do
-        #   @replace = true
-        # end
+        opts.on '-d', '--prune', 'During import delete all existing keys for which there is no key in the import file.' do
+          @prune = true
+        end
 
         opts.on '-k', '--key_id KEY_ID', 'AWS KMS Key id or Key Alias to use when importing configuration values. Default: AWS Default key.' do |key_id|
           @key_id = key_id
@@ -145,19 +149,35 @@ module SecretConfig
 
     def run_export(file_name, filtered: true)
       config = fetch_config(path, filtered: filtered)
-
-      format = file_format(file_name)
-      data   = render(config, format)
-      write_file(file_name, data)
+      write_config_file(file_name, config)
 
       puts("Exported #{path} from #{provider} to #{file_name}") if file_name.is_a?(String)
     end
 
     def run_import(file_name)
-      format = file_format(file_name)
-      data   = read_file(file_name)
-      config = parse(data, format)
-      set_config(config, path)
+      config = read_config_file(file_name)
+
+      set_config(config, path, current_values)
+
+      puts("Imported #{file_name} to #{provider} at #{path}") if file_name.is_a?(String)
+    end
+
+    def run_import_and_prune(file_name)
+      config      = read_config_file(file_name)
+      delete_keys = current_values.keys - Utils.flatten(config, path).keys
+
+      unless delete_keys.empty?
+        puts "Going to delete the following keys:"
+        delete_keys.each {|key| puts "  #{key}"}
+        sleep(5)
+      end
+
+      set_config(config, path, current_values)
+
+      delete_keys.each do |key|
+        puts "Deleting: #{key}"
+        provider_instance.delete(key)
+      end
 
       puts("Imported #{file_name} to #{provider} at #{path}") if file_name.is_a?(String)
     end
@@ -165,21 +185,64 @@ module SecretConfig
     def run_copy(source_path, target_path)
       config = fetch_config(source_path, filtered: false)
 
-      set_config(config, target_path)
+      set_config(config, target_path, current_values)
 
       puts "Copied #{source_path} to #{target_path} using #{provider}"
+    end
+
+    def run_diff(file_name)
+      file_config = read_config_file(file_name)
+      file        = Utils.flatten(file_config, path)
+
+      registry_config = fetch_config(path, filtered: false)
+      registry        = Utils.flatten(registry_config, path)
+
+      (file.keys + registry.keys).sort.uniq.each do |key|
+        if registry.key?(key)
+          if file.key?(key)
+            if file[key] != registry[key]
+              puts "* #{key}: #{registry[key]} => #{file[key]}"
+            end
+          else
+            puts "- #{key}: #{registry[key]}"
+          end
+        elsif file.key?(key)
+          puts "+ #{key}: #{file[key]}"
+        end
+      end
+
+      puts("Compared #{file_name} to #{provider} at #{path}") if file_name.is_a?(String)
     end
 
     def run_console
       IRB.start
     end
 
-    def set_config(config, path)
-      # TODO: prune, replace
+    def current_values
+      @current_values ||= Utils.flatten(fetch_config(path, filtered: false), path)
+    end
+
+    def read_config_file(file_name)
+      format = file_format(file_name)
+      data   = read_file(file_name)
+      parse(data, format)
+    end
+
+    def write_config_file(file_name, config)
+      format = file_format(file_name)
+      data   = render(config, format)
+      write_file(file_name, data)
+    end
+
+    def set_config(config, path, current_values = {})
       Utils.flatten_each(config, path) do |key, value|
         next if value.nil?
+        next if current_values[key] == value
 
-        value = random_password if value.to_s.strip == '$random'
+        if value.to_s.strip == '$random'
+          next if current_values[key]
+          value = random_password
+        end
         puts "Setting: #{key}"
         provider_instance.set(key, value)
       end
