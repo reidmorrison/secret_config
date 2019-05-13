@@ -258,7 +258,7 @@ module MyApp
       # Read configuration from AWS SSM Parameter Store
       config.secret_config.use :ssm, 
         path: "/#{Rails.env}/my_app",
-        key_id: 'xxxxx-xxxxxx-xxxxx'
+        key_id: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
     end    
     
     # ....
@@ -388,7 +388,20 @@ Import a yaml file, into a path in AWS SSM Parameter Store:
 
 Import a yaml file, into a path in AWS SSM Parameter Store, using a custom KMS key to encrypt the values:
 
-    secret_config --import production.yml --path /production/my_application --key_id "arn:aws:kms:us-east-1:23643632463:key/UUID"
+    secret_config --import production.yml --path /production/my_application --key_id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+#### Diff
+
+Before importing a new config file into the AWS SSM Parameter store, a diff can be performed to determine
+what the differences are that will be applied when the import is run with the `--prune` option.
+
+    secret_config --diff production.yml --path /production/my_application
+
+Key:
+
+    + Adding a new key to the registry.
+    - The key will be removed from the registry during the import if --prune is specified.
+    * The value for that key will change during an import.
 
 #### Export SSM parameters
 

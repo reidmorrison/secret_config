@@ -8,6 +8,7 @@ require 'secret_config/railtie' if defined?(Rails)
 module SecretConfig
   module Providers
     autoload :File, 'secret_config/providers/file'
+    autoload :Provider, 'secret_config/providers/provider'
     autoload :Ssm, 'secret_config/providers/ssm'
   end
 

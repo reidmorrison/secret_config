@@ -200,11 +200,11 @@ module SecretConfig
       (file.keys + registry.keys).sort.uniq.each do |key|
         if registry.key?(key)
           if file.key?(key)
-            if file[key] != registry[key]
+            if file[key].to_s != registry[key].to_s
               puts "* #{key}: #{registry[key]} => #{file[key]}"
             end
           else
-            puts "- #{key}: #{registry[key]}"
+            puts "- #{key}"
           end
         elsif file.key?(key)
           puts "+ #{key}: #{file[key]}"
@@ -237,7 +237,7 @@ module SecretConfig
     def set_config(config, path, current_values = {})
       Utils.flatten_each(config, path) do |key, value|
         next if value.nil?
-        next if current_values[key] == value
+        next if current_values[key].to_s == value.to_s
 
         if value.to_s.strip == '$random'
           next if current_values[key]
