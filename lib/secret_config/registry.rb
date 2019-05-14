@@ -56,7 +56,7 @@ module SecretConfig
     # Set the value for a key in the centralized configuration store.
     def set(key:, value:, encrypt: true)
       key = expand_key(key)
-      provider.set(key, value, encrypt: true)
+      provider.set(key, value, encrypt: encrypt)
       cache[key] = value
     end
 

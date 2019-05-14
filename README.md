@@ -10,8 +10,10 @@ Securely store configuration information centrally, supporting multiple tenants 
 Supports storing configuration information in:
 * File
     * Development and testing use.
+* Environment Variables
+    * Environment Variables take precedence and can be used to override any setting.
 * AWS System Manager Parameter Store
-    * Encrypt and store secrets such as passwords centrally. 
+    * Encrypt and securely store secrets such as passwords centrally. 
 
 ## Benefits
 
@@ -23,14 +25,30 @@ Benefits of moving sensitive configuration information into AWS System Manager P
     * In a large application the number of secrets can grow dramatically.
   * Removes the need to encrypt sensitive data config files.
     * Including securing and managing encryption keys.
-  * When encryption keys change, such as during a key rotation, config files don;t have to be changed.
+  * When encryption keys change, such as during a key rotation, config files don't have to be changed.
   * Removes security concerns with placing passwords in the clear into environment variables.
   * AWS System Manager Parameter Store does not charge for parameters.
     * Still recommend using a custom KMS key that charges only $1 per month.
     * Amounts as of 4/2019. Confirm what AWS charges you for these services.
   * AWS Secrets Manager charges for every secret being managed, which can accumulate quickly with large projects.
   * Configure multiple distinct application instances to support multiple tenants.
-    * For example, use separate databases with unique credentials for each tenant.    
+    * For example, use separate databases with unique credentials for each tenant.
+  * Separation of responsibilities is achieved since operations can manage production configuration.
+    * Developers do not need to be involved with production configuration such as host names and passwords.      
+  * All values are encrypted by default when stored in the AWS Parameter Store. 
+    * Prevents accidentally not encrypting sensitive data.
+  
+## Introduction
+
+When Secret Config starts up it reads all configuration entries into memory for all keys under the configured path.
+This means that once Secret Config has initialized all calls to Secret Config are extremely fast.
+
+The in-memory copy of the registry can be refreshed at any time by calling `SecretConfig.refresh!`. It can be refreshed
+via a process signal, or by calling it through an event, or via a messaging system.
+
+It is suggested that any programmatic lookup to values stored in Secret Config are called every time a value is
+being used, rather than creating a local copy of the value. This ensures that a refresh of the registry will take effect
+immediately for any code reading from Secret Config.
   
 ## Development and Test use
 
@@ -282,13 +300,6 @@ module MyApp
   
     # Add the following lines:
     if Rails.env.development? || Rails.env.test?
-      config.secret_config.use :file, file_name: File.expand_path('../../application.yml', __dir__)
-    else 
-      # Read configuration from AWS Parameter Store
-      config.secret_config.use :ssm, path: '/production/my_application'
-    end
-    
-    if Rails.env.development? || Rails.env.test?
       # Use 'config/application.yml'
       config.secret_config.use :file
     else
@@ -509,6 +520,8 @@ centralized logging systems, instead of writing to standard out or local files.
 
 ### Email Server and Assets
 
+An example of how to setup the email server and the assets for html emails. Add to `application.rb`:
+
 ~~~ruby
 # Emails
 application_url = config.secret_config.fetch("emails/asset_host")
@@ -522,7 +535,7 @@ config.action_mailer.raise_delivery_errors = config.secret_config.fetch("emails/
 
 ### Symmetric Encryption
 
-Add to `application.rb`:
+An example of how to setup Symmetric Encryption. Add to `application.rb`:
 
 ~~~ruby
 # Encryption
@@ -544,6 +557,156 @@ if config.secret_config.key?('symmetric_encryption/old/key')
   ]
 end
 ~~~
+
+Using this approach the file `config/symmetric-encryption.yml` can be removed once the keys have been moved to
+the registry.
+
+To extract existing keys from the config file so that they can be imported into the registry, 
+run the code below inside a console in each of the respective environments.
+
+~~~ruby
+require "yaml"
+require "base64"
+
+def se_config(cipher)
+  {
+    "key"     => Base64.strict_encode64(cipher.send(:key)),
+    "iv"      => Base64.strict_encode64(cipher.iv),
+    "version" => cipher.version
+  }
+end
+
+config = { "symmetric_encryption" => se_config(SymmetricEncryption.cipher) }
+if cipher = SymmetricEncryption.secondary_ciphers.first
+  config["symmetric_encryption"]["old"] = se_config(cipher)
+end
+puts config.to_yaml
+~~~
+
+## API
+
+When Secret Config starts up it reads all configuration entries immediately for all keys under the configured path.
+This means that once Secret Config has initialized all calls to Secret Config are extremely fast.
+
+Secret Config supports the following programmatic interface:
+
+### Read values
+
+Fetch the value for the supplied key, returning nil if not found:
+
+~~~ruby
+# Key is present:
+SecretConfig["logger/level"]
+# => "info"
+  
+# Key is missing:
+SecretConfig["logger/blah"]
+# => nil
+~~~
+
+Fetch the value for the supplied key, raising `SecretConfig::MissingMandatoryKey` if not found:
+
+~~~ruby
+# Key is present:
+SecretConfig.fetch("logger/level")
+# => "info"
+  
+# Key is missing:
+SecretConfig.fetch("logger/blah")
+# => SecretConfig::MissingMandatoryKey (Missing configuration value for /development/logger/blah)
+~~~
+
+A default value can be supplied when the key is not found in the registry:
+
+~~~ruby
+SecretConfig.fetch("logger/level", default: "info")
+# => "info"
+~~~
+
+Since AWS SSM Parameter store and environment variables only support string values, 
+it is neccessary to convert the string back to the type required by the program.
+
+The following types are supported:
+    `:integer`
+    `:float`
+    `:string`
+    `:boolean`
+    `:symbol`
+
+~~~ruby
+# Without type conversion:
+SecretConfig.fetch("symmetric_encryption/version")
+# => "0"
+
+# With type conversion:
+SecretConfig.fetch("symmetric_encryption/version", type: :integer)
+# => 0
+~~~
+
+When storing binary data, it should be encoded with strict base64 encoding. To automatically convert it back to binary
+specify the encoding as `:base64`
+
+~~~ruby
+# Return a value that was stored in Base64 encoding format:
+SecretConfig.fetch("symmetric_encryption/iv")
+# => "FW+/wLubAYM+ZU0bWQj59Q=="
+  
+# Base64 decode a value that was stored in Base64 encoding format:
+SecretConfig.fetch("symmetric_encryption/iv", encoding: :base64)
+# => "\x15o\xBF\xC0\xBB\x9B\x01\x83>eM\eY\b\xF9\xF5"
+~~~
+
+### Key presence
+
+Returns whether a key is present in the registry:
+
+~~~ruby
+SecretConfig.key?("logger/level")
+# => true
+~~~
+
+### Write values
+
+When Secret Config is configured to use the AWS SSM Parameter store, its values can be modified:
+
+~~~ruby
+SecretConfig["logger/level"] = "debug"
+~~~
+
+~~~ruby
+SecretConfig.set("logger/level", "debug")
+~~~
+
+### Configuration
+
+Returns a Hash copy of the configuration as a tree:
+
+~~~ruby
+SecretConfig.configuration
+~~~
+
+### Refresh Configuration
+
+Tell Secret Config to refresh its in-memory copy of the configuration settings.
+
+~~~ruby
+SecretConfig.refresh!
+~~~
+
+Example, refresh the registry any time a SIGUSR2 is raised, add the following code on startup:
+      
+~~~ruby
+Signal.trap('USR2') do
+  SecretConfig.refresh!
+end
+~~~
+
+Then to make the process refresh it registry:
+~~~shell
+kill -SIGUSR2 1234
+~~~
+
+Where `1234` above is the process PID.
 
 ## Versioning
 
