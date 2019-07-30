@@ -65,6 +65,13 @@ module SecretConfig
       cache[key] = value
     end
 
+    # Delete a key from the centralized configuration store.
+    def delete(key)
+      key = expand_key(key)
+      provider.delete(key)
+      cache.delete(key)
+    end
+
     # Refresh the in-memory cached copy of the centralized configuration information.
     # Environment variable values will take precendence over the central store values.
     def refresh!

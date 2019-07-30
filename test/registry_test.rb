@@ -1,7 +1,7 @@
 require_relative 'test_helper'
 
 class RegistryTest < Minitest::Test
-  describe SecretConfig::Providers::File do
+  describe SecretConfig::Registry do
     let :file_name do
       File.join(File.dirname(__FILE__), 'config', 'application.yml')
     end
