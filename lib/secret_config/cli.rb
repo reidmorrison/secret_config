@@ -111,8 +111,16 @@ module SecretConfig
           @prune = true
         end
 
-        opts.on '-k', '--key_id KEY_ID', 'Encrypt config settings with this AWS KMS key id or alias. Alias must start with "alias/". Default: AWS Default key.' do |key_id|
+        opts.on '--key_id KEY_ID', 'Encrypt config settings with this AWS KMS key id. Default: AWS Default key.' do |key_id|
           @key_id = key_id
+        end
+
+        opts.on '--key_alias KEY_ALIAS', 'Encrypt config settings with this AWS KMS alias.' do |key_alias|
+          if key_alias =~ /^alias\//
+            @key_id = key_alias
+          else
+            @key_id = "alias/#{key_alias}"
+          end
         end
 
         opts.on '--region REGION', 'AWS Region to use. Default: AWS_REGION env var.' do |region|
