@@ -31,7 +31,6 @@ module SecretConfig
   # Which provider to use along with any arguments
   # The path will be overriden by env var `SECRET_CONFIG_PATH` if present.
   def self.use(provider, path: nil, **args)
-    path      ||= ENV["SECRET_CONFIG_PATH"]
     @registry = SecretConfig::Registry.new(path: path, provider: provider, provider_args: args)
   end
 

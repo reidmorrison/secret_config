@@ -83,11 +83,11 @@ module SecretConfig
           @import = file_name || STDIN
         end
 
-        opts.on '-C', '--copy SOURCE_PATH', 'Import configuration from a file or stdin if no file_name supplied.' do |path|
+        opts.on '--copy SOURCE_PATH', 'Import configuration from a file or stdin if no file_name supplied.' do |path|
           @copy_path = path
         end
 
-        opts.on '-D', '--diff [FILE_NAME]', 'Compare configuration from a file or stdin if no file_name supplied.' do |file_name|
+        opts.on '--diff [FILE_NAME]', 'Compare configuration from a file or stdin if no file_name supplied.' do |file_name|
           @diff = file_name
         end
 
@@ -99,27 +99,27 @@ module SecretConfig
           @path = path
         end
 
-        opts.on '-P', '--provider PROVIDER', 'Provider to use. [ssm | file]. Default: ssm' do |provider|
+        opts.on '--provider PROVIDER', 'Provider to use. [ssm | file]. Default: ssm' do |provider|
           @provider = provider.to_sym
         end
 
-        opts.on '-U', '--no-filter', 'Do not filter passwords and keys.' do
+        opts.on '--no-filter', 'Do not filter passwords and keys.' do
           @no_filter = true
         end
 
-        opts.on '-d', '--prune', 'During import delete all existing keys for which there is no key in the import file.' do
+        opts.on '--prune', 'During import delete all existing keys for which there is no key in the import file.' do
           @prune = true
         end
 
-        opts.on '-k', '--key_id KEY_ID', 'AWS KMS Key id or Key Alias to use when importing configuration values. Default: AWS Default key.' do |key_id|
+        opts.on '-k', '--key_id KEY_ID', 'Encrypt config settings with this AWS KMS key id or alias. Alias must start with "alias/". Default: AWS Default key.' do |key_id|
           @key_id = key_id
         end
 
-        opts.on '-r', '--region REGION', 'AWS Region to use. Default: AWS_REGION env var.' do |region|
+        opts.on '--region REGION', 'AWS Region to use. Default: AWS_REGION env var.' do |region|
           @region = region
         end
 
-        opts.on '-R', '--random_size INTEGER', 'Size to use when generating random values. Whenever $random is encountered during an import. Default: 32' do |region|
+        opts.on '--random_size INTEGER', Integer, 'Size to use when generating random values. Whenever $random is encountered during an import. Default: 32' do |region|
           @random_size = random_size
         end
 
@@ -168,7 +168,7 @@ module SecretConfig
 
       unless delete_keys.empty?
         puts "Going to delete the following keys:"
-        delete_keys.each {|key| puts "  #{key}"}
+        delete_keys.each { |key| puts "  #{key}" }
         sleep(5)
       end
 
@@ -250,7 +250,8 @@ module SecretConfig
 
     def fetch_config(path, filtered: true)
       registry = Registry.new(path: path, provider: provider_instance)
-      filtered ? registry.configuration : registry.configuration(filters: nil)
+      config = filtered ? registry.configuration : registry.configuration(filters: nil)
+      sort_hash_by_key!(config)
     end
 
     def read_file(file_name_or_io)
@@ -280,14 +281,16 @@ module SecretConfig
     end
 
     def parse(data, format)
-      case format
-      when :yml
-        YAML.load(ERB.new(data).result)
-      when :json
-        JSON.parse(data)
-      else
-        raise ArgumentError, "Invalid format: #{format.inspect}"
-      end
+      config =
+        case format
+        when :yml
+          YAML.load(ERB.new(data).result)
+        when :json
+          JSON.parse(data)
+        else
+          raise ArgumentError, "Invalid format: #{format.inspect}"
+        end
+      sort_hash_by_key!(config)
     end
 
     def file_format(file_name)
@@ -306,5 +309,14 @@ module SecretConfig
     def random_password
       SecureRandom.urlsafe_base64(random_size)
     end
+
+    def sort_hash_by_key!(h)
+      h.keys.sort.each do |key|
+        value = h[key] = h.delete(key)
+        sort_hash_by_key!(value) if value.is_a?(Hash)
+      end
+      h
+    end
+
   end
 end
