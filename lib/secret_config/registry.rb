@@ -122,6 +122,10 @@ module SecretConfig
 
     def decompose(key, value, h = {})
       path, name = File.split(key)
+      if path == '.'
+        h[key] = value
+        return h
+      end
       last       = path.split('/').reduce(h) do |target, path|
         if path == ''
           target
