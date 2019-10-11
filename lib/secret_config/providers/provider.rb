@@ -2,19 +2,19 @@ module SecretConfig
   module Providers
     # Abstract Base provider
     class Provider
-      def delete(key)
+      def delete(_key)
         raise NotImplementedError
       end
 
-      def each(path)
+      def each(_path)
         raise NotImplementedError
       end
 
-      def fetch(key)
+      def fetch(_key)
         raise NotImplementedError
       end
 
-      def set(key, value)
+      def set(_key, _value)
         raise NotImplementedError
       end
 

@@ -1,7 +1,7 @@
 begin
-  require 'aws-sdk-ssm'
-rescue LoadError => exc
-  raise(LoadError, "Install gem 'aws-sdk-ssm' to use AWS Parameter Store: #{exc.message}")
+  require "aws-sdk-ssm"
+rescue LoadError => e
+  raise(LoadError, "Install gem 'aws-sdk-ssm' to use AWS Parameter Store: #{e.message}")
 end
 
 module SecretConfig
@@ -13,13 +13,13 @@ module SecretConfig
       def initialize(key_id: ENV["AWS_ACCESS_KEY_ID"], key_alias: ENV["AWS_ACCESS_KEY_ALIAS"], retry_count: 10, retry_max_ms: 3_000)
         @key_id       =
           if key_alias
-            key_alias =~ /^alias\// ? key_alias : "alias/#{key_alias}"
+            key_alias =~ %r{^alias/} ? key_alias : "alias/#{key_alias}"
           else
             key_id
           end
         @retry_count  = retry_count
         @retry_max_ms = retry_max_ms
-        @logger       = SemanticLogger['Aws::SSM'] if defined?(SemanticLogger)
+        @logger       = SemanticLogger["Aws::SSM"] if defined?(SemanticLogger)
         @client       = Aws::SSM::Client.new(logger: logger)
       end
 
@@ -34,7 +34,7 @@ module SecretConfig
               with_decryption: true,
               next_token:      token
             )
-          rescue Aws::SSM::Errors::ThrottlingException => exc
+          rescue Aws::SSM::Errors::ThrottlingException => e
             # The free tier allows 40 calls per second.
             # The Higher Throughput tier for additional cost is still limited to 100 calls per second.
             # Using a random formula since this limit is normally only exceeded during a high volume restart period
@@ -47,7 +47,7 @@ module SecretConfig
               retry
             end
             logger&.info("SSM Parameter Store GetParametersByPath API Requests throttle exceeded, retries exhausted.")
-            raise(exc)
+            raise(e)
           end
 
           resp.parameters.each { |param| yield(param.name, param.value) }

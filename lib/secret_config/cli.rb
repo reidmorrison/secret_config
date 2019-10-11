@@ -1,12 +1,10 @@
-# frozen_string_literal: true
-
-require 'optparse'
-require 'fileutils'
-require 'erb'
-require 'yaml'
-require 'json'
-require 'securerandom'
-require 'irb'
+require "optparse"
+require "fileutils"
+require "erb"
+require "yaml"
+require "json"
+require "securerandom"
+require "irb"
 
 module SecretConfig
   class CLI
@@ -30,7 +28,7 @@ module SecretConfig
       @path         = nil
       @key_id       = nil
       @key_alias    = nil
-      @region       = ENV['AWS_REGION']
+      @region       = ENV["AWS_REGION"]
       @provider     = :ssm
       @random_size  = 32
       @no_filter    = false
@@ -92,82 +90,82 @@ module SecretConfig
           secret_config [options]
         BANNER
 
-        opts.on '-e', '--export [FILE_NAME]', 'Export configuration to a file or stdout if no file_name supplied.' do |file_name|
+        opts.on "-e", "--export [FILE_NAME]", "Export configuration to a file or stdout if no file_name supplied." do |file_name|
           @export = file_name || STDOUT
         end
 
-        opts.on '-i', '--import [FILE_NAME]', 'Import configuration from a file or stdin if no file_name supplied.' do |file_name|
+        opts.on "-i", "--import [FILE_NAME]", "Import configuration from a file or stdin if no file_name supplied." do |file_name|
           @import = file_name || STDIN
         end
 
-        opts.on '--copy SOURCE_PATH', 'Import configuration from a file or stdin if no file_name supplied.' do |path|
+        opts.on "--copy SOURCE_PATH", "Import configuration from a file or stdin if no file_name supplied." do |path|
           @copy_path = path
         end
 
-        opts.on '--diff [FILE_NAME]', 'Compare configuration from a file or stdin if no file_name supplied.' do |file_name|
+        opts.on "--diff [FILE_NAME]", "Compare configuration from a file or stdin if no file_name supplied." do |file_name|
           @diff = file_name
         end
 
-        opts.on '-s', '--set KEY=VALUE', 'Set one key to value. Example: --set mysql/database=localhost' do |param|
-          @set_key, @set_value = param.split('=')
+        opts.on "-s", "--set KEY=VALUE", "Set one key to value. Example: --set mysql/database=localhost" do |param|
+          @set_key, @set_value = param.split("=")
           unless @set_key && @set_value
             raise(ArgumentError, "Supply key and value separated by '='. Example: --set mysql/database=localhost")
           end
         end
 
-        opts.on '-f', '--fetch KEY', 'Fetch the value for one setting. Example: --get mysql/database. ' do |key|
+        opts.on "-f", "--fetch KEY", "Fetch the value for one setting. Example: --get mysql/database. " do |key|
           @fetch_key = key
         end
 
-        opts.on '-d', '--delete KEY', 'Delete one specific key. See --delete-path to delete all keys under a specific path ' do |key|
+        opts.on "-d", "--delete KEY", "Delete one specific key. See --delete-path to delete all keys under a specific path " do |key|
           @delete_key = key
         end
 
-        opts.on '-r', '--delete-path PATH', 'Recursively delete all keys under the specified path.. ' do |path|
+        opts.on "-r", "--delete-path PATH", "Recursively delete all keys under the specified path.. " do |path|
           @delete_path = path
         end
 
-        opts.on '-c', '--console', 'Start interactive console.' do
+        opts.on "-c", "--console", "Start interactive console." do
           @console = true
         end
 
-        opts.on '-p', '--path PATH', 'Path to import from / export to.' do |path|
+        opts.on "-p", "--path PATH", "Path to import from / export to." do |path|
           @path = path
         end
 
-        opts.on '--provider PROVIDER', 'Provider to use. [ssm | file]. Default: ssm' do |provider|
+        opts.on "--provider PROVIDER", "Provider to use. [ssm | file]. Default: ssm" do |provider|
           @provider = provider.to_sym
         end
 
-        opts.on '--no-filter', 'Do not filter passwords and keys.' do
+        opts.on "--no-filter", "Do not filter passwords and keys." do
           @no_filter = true
         end
 
-        opts.on '--prune', 'During import delete all existing keys for which there is no key in the import file.' do
+        opts.on "--prune", "During import delete all existing keys for which there is no key in the import file." do
           @prune = true
         end
 
-        opts.on '--key_id KEY_ID', 'Encrypt config settings with this AWS KMS key id. Default: AWS Default key.' do |key_id|
+        opts.on "--key_id KEY_ID", "Encrypt config settings with this AWS KMS key id. Default: AWS Default key." do |key_id|
           @key_id = key_id
         end
 
-        opts.on '--key_alias KEY_ALIAS', 'Encrypt config settings with this AWS KMS alias.' do |key_alias|
+        opts.on "--key_alias KEY_ALIAS", "Encrypt config settings with this AWS KMS alias." do |key_alias|
           @key_alias = key_alias
         end
 
-        opts.on '--region REGION', 'AWS Region to use. Default: AWS_REGION env var.' do |region|
+        opts.on "--region REGION", "AWS Region to use. Default: AWS_REGION env var." do |region|
           @region = region
         end
 
-        opts.on '--random_size INTEGER', Integer, 'Size to use when generating random values. Whenever $random is encountered during an import. Default: 32' do |random_size|
+        opts.on "--random_size INTEGER", Integer, "Size to use when generating random values. Whenever $random is encountered during an import. Default: 32" do |random_size|
           @random_size = random_size
         end
 
-        opts.on '-v', '--version', 'Display Symmetric Encryption version.' do
+        opts.on "-v", "--version", "Display Symmetric Encryption version." do
           @show_version = true
         end
 
-        opts.on('-h', '--help', 'Prints this help.') do
+        opts.on("-h", "--help", "Prints this help.") do
           puts opts
           exit
         end
@@ -240,9 +238,7 @@ module SecretConfig
       (file.keys + registry.keys).sort.uniq.each do |key|
         if registry.key?(key)
           if file.key?(key)
-            if file[key].to_s != registry[key].to_s
-              puts "* #{key}: #{registry[key]} => #{file[key]}"
-            end
+            puts "* #{key}: #{registry[key]} => #{file[key]}" if file[key].to_s != registry[key].to_s
           else
             puts "- #{key}"
           end
@@ -292,7 +288,7 @@ module SecretConfig
         next if value.nil?
         next if current_values[key].to_s == value.to_s
 
-        if value.to_s.strip == '$random'
+        if value.to_s.strip == "$random"
           next if current_values[key]
 
           value = random_password
@@ -320,7 +316,7 @@ module SecretConfig
       output_path = ::File.dirname(file_name_or_io)
       FileUtils.mkdir_p(output_path) unless ::File.exist?(output_path)
 
-      ::File.open(file_name_or_io, 'w') { |io| io.write(data) }
+      ::File.open(file_name_or_io, "w") { |io| io.write(data) }
     end
 
     def render(hash, format)
@@ -351,9 +347,9 @@ module SecretConfig
       return :yml unless file_name.is_a?(String)
 
       case File.extname(file_name).downcase
-      when '.yml', '.yaml'
+      when ".yml", ".yaml"
         :yml
-      when '.json'
+      when ".json"
         :json
       else
         raise ArgumentError, "Import/Export file name must end with '.yml' or '.json'"

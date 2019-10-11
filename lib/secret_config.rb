@@ -1,8 +1,8 @@
-require 'forwardable'
-require 'secret_config/version'
-require 'secret_config/errors'
-require 'secret_config/registry'
-require 'secret_config/railtie' if defined?(Rails)
+require "forwardable"
+require "secret_config/version"
+require "secret_config/errors"
+require "secret_config/registry"
+require "secret_config/railtie" if defined?(Rails)
 
 # Centralized Configuration and Secrets Management for Ruby and Rails applications.
 module SecretConfig
@@ -11,13 +11,13 @@ module SecretConfig
   FILTERED = "[FILTERED]".freeze
 
   module Providers
-    autoload :File, 'secret_config/providers/file'
-    autoload :Provider, 'secret_config/providers/provider'
-    autoload :Ssm, 'secret_config/providers/ssm'
+    autoload :File, "secret_config/providers/file"
+    autoload :Provider, "secret_config/providers/provider"
+    autoload :Ssm, "secret_config/providers/ssm"
   end
 
-  autoload :CLI, 'secret_config/cli'
-  autoload :Utils, 'secret_config/utils'
+  autoload :CLI, "secret_config/cli"
+  autoload :Utils, "secret_config/utils"
 
   class << self
     extend Forwardable
@@ -66,5 +66,5 @@ module SecretConfig
   private
 
   @check_env_var = true
-  @filters       = [/password/, 'key', /secret_key/]
+  @filters       = [/password/, "key", /secret_key/]
 end

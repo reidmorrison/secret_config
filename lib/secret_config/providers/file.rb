@@ -1,5 +1,5 @@
-require 'yaml'
-require 'erb'
+require "yaml"
+require "erb"
 
 module SecretConfig
   module Providers
@@ -13,12 +13,12 @@ module SecretConfig
       end
 
       def each(path, &block)
-        config = YAML.load(ERB.new(::File.new(file_name).read).result)
+        config = YAML.safe_load(ERB.new(::File.new(file_name).read).result)
 
-        paths    = path.sub(/\A\/*/, '').sub(/\/*\Z/, '').split("/")
+        paths    = path.sub(%r{\A/*}, "").sub(%r{/*\Z}, "").split("/")
         settings = config.dig(*paths)
 
-        raise(ConfigurationError, "Path #{paths.join("/")} not found in file: #{file_name}") unless settings
+        raise(ConfigurationError, "Path #{paths.join('/')} not found in file: #{file_name}") unless settings
 
         Utils.flatten_each(settings, path, &block)
         nil

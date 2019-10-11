@@ -1,5 +1,5 @@
-require 'base64'
-require 'concurrent-ruby'
+require "base64"
+require "concurrent-ruby"
 
 module SecretConfig
   # Centralized configuration with values stored in AWS System Manager Parameter Store
@@ -9,7 +9,7 @@ module SecretConfig
 
     def initialize(path: nil, provider: nil, provider_args: nil)
       @path = default_path(path)
-      raise(UndefinedRootError, 'Root must start with /') unless @path.start_with?('/')
+      raise(UndefinedRootError, "Root must start with /") unless @path.start_with?("/")
 
       resolved_provider = default_provider(provider)
       provider_args     = nil if resolved_provider != provider
@@ -95,18 +95,18 @@ module SecretConfig
     # Returns the value from an env var if it is present,
     # Otherwise the value is returned unchanged.
     def env_var_override(key, value)
-      env_var_name = relative_key(key).upcase.gsub('/', '_')
+      env_var_name = relative_key(key).upcase.gsub("/", "_")
       ENV[env_var_name] || value
     end
 
     # Add the path to the path if it is a relative path.
     def expand_key(key)
-      key.start_with?('/') ? key : "#{path}/#{key}"
+      key.start_with?("/") ? key : "#{path}/#{key}"
     end
 
     # Convert the key to a relative path by removing the path.
     def relative_key(key)
-      key.start_with?('/') ? key.sub("#{path}/", '') : key
+      key.start_with?("/") ? key.sub("#{path}/", "") : key
     end
 
     def filter_value(key, value, filters)
@@ -137,7 +137,7 @@ module SecretConfig
       when :boolean
         %w[true 1 t].include?(value.to_s.downcase)
       when :symbol
-        value.to_sym unless value.nil? || value.to_s.strip == ''
+        value.to_sym unless value.nil? || value.to_s.strip == ""
       end
     end
 
@@ -146,7 +146,7 @@ module SecretConfig
       return provider if provider.respond_to?(:each) && provider.respond_to?(:set)
 
       klass = Utils.constantize_symbol(provider)
-      args && args.size > 0 ? klass.new(**args) : klass.new
+      args && !args.empty? ? klass.new(**args) : klass.new
     end
 
     def default_path(configured_path)
@@ -155,11 +155,11 @@ module SecretConfig
 
       raise(UndefinedRootError, "Either set env var 'SECRET_CONFIG_PATH' or call SecretConfig.use") unless path
 
-      path.start_with?('/') ? path : "/#{path}"
+      path.start_with?("/") ? path : "/#{path}"
     end
 
     def default_provider(provider)
-      provider = (ENV["SECRET_CONFIG_PROVIDER"] || provider || 'file')
+      provider = (ENV["SECRET_CONFIG_PROVIDER"] || provider || "file")
 
       return provider if provider.respond_to?(:each) && provider.respond_to?(:set)
 

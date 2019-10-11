@@ -30,12 +30,12 @@ module SecretConfig
 
     def self.decompose(key, value, h = {})
       full_path, name = File.split(key)
-      if full_path == '.'
+      if full_path == "."
         h[key] = value
         return h
       end
-      last       = full_path.split('/').reduce(h) do |target, path|
-        if path == ''
+      last       = full_path.split("/").reduce(h) do |target, path|
+        if path == ""
           target
         elsif target.key?(path)
           val = target[path]
@@ -49,7 +49,7 @@ module SecretConfig
       h
     end
 
-    def self.constantize_symbol(symbol, namespace = 'SecretConfig::Providers')
+    def self.constantize_symbol(symbol, namespace = "SecretConfig::Providers")
       klass = "#{namespace}::#{camelize(symbol.to_s)}"
       begin
         Object.const_get(klass)
@@ -62,8 +62,8 @@ module SecretConfig
     def self.camelize(term)
       string = term.to_s
       string = string.sub(/^[a-z\d]*/, &:capitalize)
-      string.gsub!(/(?:_|(\/))([a-z\d]*)/i) { "#{Regexp.last_match(1)}#{Regexp.last_match(2).capitalize}" }
-      string.gsub!('/'.freeze, '::'.freeze)
+      string.gsub!(%r{(?:_|(/))([a-z\d]*)}i) { "#{Regexp.last_match(1)}#{Regexp.last_match(2).capitalize}" }
+      string.gsub!("/".freeze, "::".freeze)
       string
     end
   end
