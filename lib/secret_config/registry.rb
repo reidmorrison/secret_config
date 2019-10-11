@@ -25,7 +25,7 @@ module SecretConfig
       cache.each_pair do |key, value|
         key   = relative_key(key) if relative
         value = filter_value(key, value, filters)
-        decompose(key, value, h)
+        Utils.decompose(key, value, h)
       end
       h
     end
@@ -112,33 +112,9 @@ module SecretConfig
     def filter_value(key, value, filters)
       return value unless filters
 
-      _, name = File.split(key)
-      filter  = filters.any? do |filter|
-        filter.is_a?(Regexp) ? name =~ filter : name == filter
-      end
-
-      filter ? '[FILTERED]' : value
-    end
-
-    def decompose(key, value, h = {})
-      path, name = File.split(key)
-      if path == '.'
-        h[key] = value
-        return h
-      end
-      last       = path.split('/').reduce(h) do |target, path|
-        if path == ''
-          target
-        elsif target.key?(path)
-          val = target[path]
-          val = target[path] = {'__root__' => val} unless val.is_a?(Hash)
-          val
-        else
-          target[path] = {}
-        end
-      end
-      last[name] = value
-      h
+      _, name  = File.split(key)
+      filtered = filters.any? { |filter| filter.is_a?(Regexp) ? name =~ filter : name == filter }
+      filtered ? FILTERED : value
     end
 
     def convert_encoding(encoding, value)

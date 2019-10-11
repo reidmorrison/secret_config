@@ -4,8 +4,12 @@ module SecretConfig
     # If path is supplied it is prepended to every key returned.
     def self.flatten_each(hash, path = nil, &block)
       hash.each_pair do |key, value|
-        name = path.nil? ? key : "#{path}/#{key}"
-        value.is_a?(Hash) ? flatten_each(value, name, &block) : yield(name, value)
+        if key == NODE_KEY
+          yield(path, value)
+        else
+          name = path.nil? ? key : "#{path}/#{key}"
+          value.is_a?(Hash) ? flatten_each(value, name, &block) : yield(name, value)
+        end
       end
     end
 
@@ -14,6 +18,34 @@ module SecretConfig
     def self.flatten(hash, path = nil)
       h = {}
       flatten_each(hash, path) { |key, value| h[key] = value }
+      h
+    end
+
+    # Takes a flat hash and expands the keys on each `/` into a deep hierarchy.
+    def self.hierarchical(flat_hash)
+      h = {}
+      flat_hash.each_pair { |path, value| decompose(path, value, h) }
+      h
+    end
+
+    def self.decompose(key, value, h = {})
+      full_path, name = File.split(key)
+      if full_path == '.'
+        h[key] = value
+        return h
+      end
+      last       = full_path.split('/').reduce(h) do |target, path|
+        if path == ''
+          target
+        elsif target.key?(path)
+          val = target[path]
+          val = target[path] = {NODE_KEY => val} unless val.is_a?(Hash)
+          val
+        else
+          target[path] = {}
+        end
+      end
+      last[name] = value
       h
     end
 

@@ -118,22 +118,6 @@ class RegistryTest < Minitest::Test
         assert_equal "ABCDEF1234567890ABCDEF1234567890", registry.fetch("symmetric_encryption/key", encoding: :base64)
       end
     end
-
-    private
-
-    def decompose(key, value, h = {})
-      path, name = File.split(key)
-      last       = path.split('/').reduce(h) do |target, path|
-        if path == ''
-          target
-        elsif target.key?(path)
-          target[path]
-        else
-          target[path] = {}
-        end
-      end
-      last[name] = value
-      h
-    end
   end
 end
+
