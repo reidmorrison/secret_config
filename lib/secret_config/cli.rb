@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'optparse'
 require 'fileutils'
 require 'erb'
@@ -11,6 +13,7 @@ module SecretConfig
     attr_reader :path, :region, :provider,
                 :export, :no_filter,
                 :import, :key_id, :key_alias, :random_size, :prune, :overwrite,
+                :fetch_key, :delete_key, :set_key, :set_value, :delete_path,
                 :copy_path, :diff,
                 :console,
                 :show_version
@@ -37,6 +40,11 @@ module SecretConfig
       @show_version = false
       @console      = false
       @diff         = false
+      @set_key      = nil
+      @set_value    = nil
+      @fetch_key    = nil
+      @delete_key   = nil
+      @delete_path  = nil
 
       if argv.empty?
         puts parser
@@ -61,6 +69,14 @@ module SecretConfig
         run_copy(copy_path, path)
       elsif diff
         run_diff(diff)
+      elsif set_key
+        run_set(set_key, set_value)
+      elsif fetch_key
+        run_fetch(fetch_key)
+      elsif delete_key
+        run_delete(delete_key)
+      elsif delete_path
+        run_delete_path(delete_path)
       else
         puts parser
       end
@@ -93,16 +109,18 @@ module SecretConfig
         end
 
         opts.on '-s', '--set KEY=VALUE', 'Set one key to value. Example: --set mysql/database=localhost' do |param|
-          @set_key, @set_value = param.split("=")
-          raise(ArgumentError, "Supply key and value separated by '='. Example: --set mysql/database=localhost") unless @set_key && @set_value
+          @set_key, @set_value = param.split('=')
+          unless @set_key && @set_value
+            raise(ArgumentError, "Supply key and value separated by '='. Example: --set mysql/database=localhost")
+          end
         end
 
         opts.on '-f', '--fetch KEY', 'Fetch the value for one setting. Example: --get mysql/database. ' do |key|
-          @fetch = key
+          @fetch_key = key
         end
 
         opts.on '-d', '--delete KEY', 'Delete one specific key. See --delete-path to delete all keys under a specific path ' do |key|
-          @delete = key
+          @delete_key = key
         end
 
         opts.on '-r', '--delete-path PATH', 'Recursively delete all keys under the specified path.. ' do |path|
@@ -141,7 +159,7 @@ module SecretConfig
           @region = region
         end
 
-        opts.on '--random_size INTEGER', Integer, 'Size to use when generating random values. Whenever $random is encountered during an import. Default: 32' do |region|
+        opts.on '--random_size INTEGER', Integer, 'Size to use when generating random values. Whenever $random is encountered during an import. Default: 32' do |random_size|
           @random_size = random_size
         end
 
@@ -240,6 +258,19 @@ module SecretConfig
       IRB.start
     end
 
+    def run_delete(key)
+      provider_instance.delete(key)
+    end
+
+    def run_fetch(key)
+      value = provider_instance.fetch(key)
+      puts value if value
+    end
+
+    def run_set(key, value)
+      provider_instance.set(key, value)
+    end
+
     def current_values
       @current_values ||= Utils.flatten(fetch_config(path, filtered: false), path)
     end
@@ -263,6 +294,7 @@ module SecretConfig
 
         if value.to_s.strip == '$random'
           next if current_values[key]
+
           value = random_password
         end
         puts "Setting: #{key}"
@@ -306,7 +338,7 @@ module SecretConfig
       config =
         case format
         when :yml
-          YAML.load(ERB.new(data).result)
+          YAML.safe_load(ERB.new(data).result)
         when :json
           JSON.parse(data)
         else
@@ -339,6 +371,5 @@ module SecretConfig
       end
       h
     end
-
   end
 end

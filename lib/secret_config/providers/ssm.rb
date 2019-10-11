@@ -66,8 +66,16 @@ module SecretConfig
         )
       end
 
+      # Deletes the key.
+      # Nothing is done if the key was not found.
       def delete(key)
         client.delete_parameter(name: key)
+      rescue Aws::SSM::Errors::ParameterNotFound
+      end
+
+      # Returns the value or `nil` if not found
+      def fetch(key)
+        client.get_parameter(name: key, with_decryption: true).parameter.value
       rescue Aws::SSM::Errors::ParameterNotFound
       end
     end
