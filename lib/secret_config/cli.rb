@@ -10,7 +10,7 @@ module SecretConfig
   class CLI
     attr_reader :path, :region, :provider,
                 :export, :no_filter,
-                :import, :key_id, :random_size, :prune, :overwrite,
+                :import, :key_id, :key_alias, :random_size, :prune, :overwrite,
                 :copy_path, :diff,
                 :console,
                 :show_version
@@ -26,6 +26,7 @@ module SecretConfig
       @import       = false
       @path         = nil
       @key_id       = nil
+      @key_alias    = nil
       @region       = ENV['AWS_REGION']
       @provider     = :ssm
       @random_size  = 32
@@ -91,6 +92,23 @@ module SecretConfig
           @diff = file_name
         end
 
+        opts.on '-s', '--set KEY=VALUE', 'Set one key to value. Example: --set mysql/database=localhost' do |param|
+          @set_key, @set_value = param.split("=")
+          raise(ArgumentError, "Supply key and value separated by '='. Example: --set mysql/database=localhost") unless @set_key && @set_value
+        end
+
+        opts.on '-f', '--fetch KEY', 'Fetch the value for one setting. Example: --get mysql/database. ' do |key|
+          @fetch = key
+        end
+
+        opts.on '-d', '--delete KEY', 'Delete one specific key. See --delete-path to delete all keys under a specific path ' do |key|
+          @delete = key
+        end
+
+        opts.on '-r', '--delete-path PATH', 'Recursively delete all keys under the specified path.. ' do |path|
+          @delete_path = path
+        end
+
         opts.on '-c', '--console', 'Start interactive console.' do
           @console = true
         end
@@ -116,11 +134,7 @@ module SecretConfig
         end
 
         opts.on '--key_alias KEY_ALIAS', 'Encrypt config settings with this AWS KMS alias.' do |key_alias|
-          if key_alias =~ /^alias\//
-            @key_id = key_alias
-          else
-            @key_id = "alias/#{key_alias}"
-          end
+          @key_alias = key_alias
         end
 
         opts.on '--region REGION', 'AWS Region to use. Default: AWS_REGION env var.' do |region|
@@ -148,7 +162,7 @@ module SecretConfig
       @provider_instance ||= begin
         case provider
         when :ssm
-          Providers::Ssm.new(key_id: key_id)
+          Providers::Ssm.new(key_id: key_id, key_alias: key_alias)
         else
           raise ArgumentError, "Invalid provider: #{provider}"
         end
@@ -258,7 +272,7 @@ module SecretConfig
 
     def fetch_config(path, filtered: true)
       registry = Registry.new(path: path, provider: provider_instance)
-      config = filtered ? registry.configuration : registry.configuration(filters: nil)
+      config   = filtered ? registry.configuration : registry.configuration(filters: nil)
       sort_hash_by_key!(config)
     end
 

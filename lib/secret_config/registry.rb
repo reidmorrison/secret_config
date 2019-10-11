@@ -130,7 +130,9 @@ module SecretConfig
         if path == ''
           target
         elsif target.key?(path)
-          target[path]
+          val = target[path]
+          val = target[path] = {'__root__' => val} unless val.is_a?(Hash)
+          val
         else
           target[path] = {}
         end
