@@ -40,11 +40,11 @@ class RegistryTest < Minitest::Test
       end
 
       it 'filters passwords' do
-        assert_equal "[FILTERED]", registry.configuration.dig("mysql", "password")
+        assert_equal SecretConfig::FILTERED, registry.configuration.dig("mysql", "password")
       end
 
       it 'filters key' do
-        assert_equal "[FILTERED]", registry.configuration.dig("symmetric_encryption", "key")
+        assert_equal SecretConfig::FILTERED, registry.configuration.dig("symmetric_encryption", "key")
       end
     end
 

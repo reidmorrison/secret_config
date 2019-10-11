@@ -157,7 +157,7 @@ module SecretConfig
           @region = region
         end
 
-        opts.on "--random_size INTEGER", Integer, "Size to use when generating random values. Whenever $random is encountered during an import. Default: 32" do |random_size|
+        opts.on "--random_size INTEGER", Integer, "Size to use when generating random values. Whenever #{RANDOM} is encountered during an import. Default: 32" do |random_size|
           @random_size = random_size
         end
 
@@ -238,7 +238,9 @@ module SecretConfig
       (file.keys + registry.keys).sort.uniq.each do |key|
         if registry.key?(key)
           if file.key?(key)
-            puts "* #{key}: #{registry[key]} => #{file[key]}" if file[key].to_s != registry[key].to_s
+            value = file[key].to_s
+            # Ignore filtered values
+            puts "* #{key}: #{registry[key]} => #{file[key]}" if (value != registry[key].to_s) && (value != FILTERED)
           else
             puts "- #{key}"
           end
@@ -288,10 +290,13 @@ module SecretConfig
         next if value.nil?
         next if current_values[key].to_s == value.to_s
 
-        if value.to_s.strip == "$random"
+        if value.to_s.strip == RANDOM
           next if current_values[key]
 
           value = random_password
+        elsif value == FILTERED
+          # Ignore filtered values
+          next
         end
         puts "Setting: #{key}"
         provider_instance.set(key, value)

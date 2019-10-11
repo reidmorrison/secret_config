@@ -9,6 +9,7 @@ module SecretConfig
   # When a node is both a value and a hash/branch in the tree, put its value in its hash with the following key:
   NODE_KEY = "__value__".freeze
   FILTERED = "[FILTERED]".freeze
+  RANDOM   = "$(random)".freeze
 
   module Providers
     autoload :File, "secret_config/providers/file"
