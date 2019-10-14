@@ -13,7 +13,7 @@ module SecretConfig
       end
 
       def each(path, &block)
-        config = YAML.safe_load(ERB.new(::File.new(file_name).read).result)
+        config = YAML.load(ERB.new(::File.new(file_name).read).result)
 
         paths    = path.sub(%r{\A/*}, "").sub(%r{/*\Z}, "").split("/")
         settings = config.dig(*paths)
