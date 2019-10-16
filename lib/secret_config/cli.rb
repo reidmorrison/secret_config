@@ -11,6 +11,7 @@ module SecretConfig
     attr_reader :path, :region, :provider,
                 :export, :no_filter,
                 :import, :key_id, :key_alias, :random_size, :prune, :overwrite,
+                :diff_path, :import_path,
                 :fetch_key, :delete_key, :set_key, :set_value, :delete_path,
                 :copy_path, :diff,
                 :console,
@@ -43,6 +44,8 @@ module SecretConfig
       @fetch_key    = nil
       @delete_key   = nil
       @delete_path  = nil
+      @diff_path    = nil
+      @import_path  = nil
 
       if argv.empty?
         puts parser
@@ -58,15 +61,15 @@ module SecretConfig
       elsif console
         run_console
       elsif export
-        run_export(export, filtered: !no_filter)
-      elsif import && prune
-        run_import_and_prune(import)
+        run_export(export, path, filtered: !no_filter)
       elsif import
-        run_import(import)
-      elsif copy_path
-        run_copy(copy_path, path)
+        run_import(import, path, prune)
+      elsif import_path
+        run_import_path(import_path, path, prune)
       elsif diff
-        run_diff(diff)
+        run_diff(diff, path)
+      elsif diff_path
+        run_diff_path(diff, path)
       elsif set_key
         run_set(set_key, set_value)
       elsif fetch_key
@@ -90,20 +93,24 @@ module SecretConfig
           secret_config [options]
         BANNER
 
-        opts.on "-e", "--export [FILE_NAME]", "Export configuration to a file or stdout if no file_name supplied." do |file_name|
+        opts.on "-e", "--export [FILE_NAME]", "Export configuration to a file or stdout if no file_name supplied. --path SOURCE_PATH is required." do |file_name|
           @export = file_name || STDOUT
         end
 
-        opts.on "-i", "--import [FILE_NAME]", "Import configuration from a file or stdin if no file_name supplied." do |file_name|
+        opts.on "-i", "--import [FILE_NAME]", "Import configuration from a file or stdin if no file_name supplied. --path TARGET_PATH is required." do |file_name|
           @import = file_name || STDIN
         end
 
-        opts.on "--copy SOURCE_PATH", "Import configuration from a file or stdin if no file_name supplied." do |path|
-          @copy_path = path
+        opts.on "--import-path SOURCE_PATH", "Import configuration from the configuration on another path. --path TARGET_PATH is required." do |path|
+          @import_path = path
         end
 
-        opts.on "--diff [FILE_NAME]", "Compare configuration from a file or stdin if no file_name supplied." do |file_name|
+        opts.on "--diff [FILE_NAME]", "Compare configuration from a file or stdin if no file_name supplied. --path TARGET_PATH is required." do |file_name|
           @diff = file_name
+        end
+
+        opts.on "--diff-path SOURCE_PATH", "Diff configuration with the configuration on another path. --path TARGET_PATH is required." do |path|
+          @diff_path = path
         end
 
         opts.on "-s", "--set KEY=VALUE", "Set one key to value. Example: --set mysql/database=localhost" do |param|
@@ -129,7 +136,7 @@ module SecretConfig
           @console = true
         end
 
-        opts.on "-p", "--path PATH", "Path to import from / export to." do |path|
+        opts.on "-p", "--path PATH", "Path in central configuration to use." do |path|
           @path = path
         end
 
@@ -141,7 +148,7 @@ module SecretConfig
           @no_filter = true
         end
 
-        opts.on "--prune", "During import delete all existing keys for which there is no key in the import file." do
+        opts.on "--prune", "During import delete all existing keys for which there is no key in the import file. Only applies to --import and --import-path." do
           @prune = true
         end
 
@@ -185,71 +192,57 @@ module SecretConfig
       end
     end
 
-    def run_export(file_name, filtered: true)
+    def run_export(file_name, path, filtered: true)
+      raise(ArgumentError, "Missing required option --path") unless path
+
       config = fetch_config(path, filtered: filtered)
       write_config_file(file_name, config)
 
       puts("Exported #{path} from #{provider} to #{file_name}") if file_name.is_a?(String)
     end
 
-    def run_import(file_name)
+    def run_import(file_name, path, prune = false)
+      raise(ArgumentError, "Missing required option --path") unless path
+
       config = read_config_file(file_name)
+      import_config(config, path, prune)
 
-      set_config(config, path, current_values)
-
-      puts("Imported #{file_name} to #{provider} at #{path}") if file_name.is_a?(String)
+      puts("Imported #{file_name} to #{path} on provider: #{provider}") if file_name.is_a?(String)
     end
 
-    def run_import_and_prune(file_name)
-      config      = read_config_file(file_name)
-      delete_keys = current_values.keys - Utils.flatten(config, path).keys
+    def run_import_path(source_path, path, prune = false)
+      raise(ArgumentError, "Missing required option --path") unless path
 
-      unless delete_keys.empty?
-        puts "Going to delete the following keys:"
-        delete_keys.each { |key| puts "  #{key}" }
-        sleep(5)
-      end
-
-      set_config(config, path, current_values)
-
-      delete_keys.each do |key|
-        puts "Deleting: #{key}"
-        provider_instance.delete(key)
-      end
-
-      puts("Imported #{file_name} to #{provider} at #{path}") if file_name.is_a?(String)
-    end
-
-    def run_copy(source_path, target_path)
       config = fetch_config(source_path, filtered: false)
+      import_config(config, path, prune)
 
-      set_config(config, target_path, current_values)
-
-      puts "Copied #{source_path} to #{target_path} using #{provider}"
+      puts("Imported #{source_path} to #{path} on provider: #{provider}")
     end
 
-    def run_diff(file_name)
+    def run_diff(file_name, path)
+      raise(ArgumentError, "Missing required option --path") unless path
+
       file_config = read_config_file(file_name)
       file        = Utils.flatten(file_config, path)
 
       registry_config = fetch_config(path, filtered: false)
       registry        = Utils.flatten(registry_config, path)
 
-      (file.keys + registry.keys).sort.uniq.each do |key|
-        if registry.key?(key)
-          if file.key?(key)
-            value = file[key].to_s
-            # Ignore filtered values
-            puts "* #{key}: #{registry[key]} => #{file[key]}" if (value != registry[key].to_s) && (value != FILTERED)
-          else
-            puts "- #{key}"
-          end
-        elsif file.key?(key)
-          puts "+ #{key}: #{file[key]}"
-        end
-      end
+      puts("Comparing #{file_name} to #{path} on provider: #{provider}") if file_name.is_a?(String)
+      diff_config(file, registry)
+    end
 
-      puts("Compared #{file_name} to #{provider} at #{path}") if file_name.is_a?(String)
+    def run_diff_path(source_path, path)
+      raise(ArgumentError, "Missing required option --path") unless path
+
+      source_config = fetch_config(source_path, filtered: false)
+      source        = Utils.flatten(source_config, path)
+
+      target_config = fetch_config(path, filtered: false)
+      target        = Utils.flatten(target_config, path)
+
+      puts("Comparing #{source_path} to #{path} on provider: #{provider}")
+      diff_config(source, target)
     end
 
     def run_console
@@ -307,6 +300,42 @@ module SecretConfig
       registry = Registry.new(path: path, provider: provider_instance)
       config   = filtered ? registry.configuration : registry.configuration(filters: nil)
       sort_hash_by_key!(config)
+    end
+
+    # Diffs two configs and displays the results
+    def diff_config(source, target)
+      (source.keys + target.keys).sort.uniq.each do |key|
+        if target.key?(key)
+          if source.key?(key)
+            value = source[key].to_s
+            # Ignore filtered values
+            puts "* #{key}: #{target[key]} => #{source[key]}" if (value != target[key].to_s) && (value != FILTERED)
+          else
+            puts "- #{key}"
+          end
+        elsif source.key?(key)
+          puts "+ #{key}: #{source[key]}"
+        end
+      end
+    end
+
+    def import_config(config, path, prune = false)
+      raise(ArgumentError, "Missing required option --path") unless path
+
+      delete_keys = prune ? current_values.keys - Utils.flatten(config, path).keys : []
+
+      unless delete_keys.empty?
+        puts "Going to delete the following keys:"
+        delete_keys.each { |key| puts "  #{key}" }
+        sleep(5)
+      end
+
+      set_config(config, path, current_values)
+
+      delete_keys.each do |key|
+        puts "Deleting: #{key}"
+        provider_instance.delete(key)
+      end
     end
 
     def read_file(file_name_or_io)
