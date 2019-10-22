@@ -30,6 +30,7 @@ module SecretConfig
     def_delegator :registry, :key?
     def_delegator :registry, :fetch
     def_delegator :registry, :set
+    def_delegator :registry, :delete
     def_delegator :registry, :refresh!
   end
 
