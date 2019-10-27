@@ -99,6 +99,7 @@ The following types are supported:
     `:string`
     `:boolean`
     `:symbol`
+    `:json`
 
 ~~~ruby
 # Without type conversion:

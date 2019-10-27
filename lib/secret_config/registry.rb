@@ -41,10 +41,10 @@ module SecretConfig
     end
 
     # Returns [String] configuration value for the supplied key
-    def fetch(key, default: nil, type: :string, encoding: nil)
+    def fetch(key, default: :no_default_supplied, type: :string, encoding: nil)
       value = self[key]
       if value.nil?
-        raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}") if default.nil?
+        raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}") if default == :no_default_supplied
 
         value = default.respond_to?(:call) ? default.call : default
       end
@@ -138,6 +138,10 @@ module SecretConfig
         %w[true 1 t].include?(value.to_s.downcase)
       when :symbol
         value.to_sym unless value.nil? || value.to_s.strip == ""
+      when :json
+        value.nil? ? nil : JSON.parse(value)
+      else
+        raise(ArgumentError, "Unrecognized type:#{type}")
       end
     end
 
