@@ -56,11 +56,11 @@ module SecretConfig
         end
       end
 
-      def set(key, value, encrypt: true)
+      def set(key, value)
         client.put_parameter(
           name:      key,
           value:     value.to_s,
-          type:      encrypt ? "SecureString" : "String",
+          type:      "SecureString",
           key_id:    key_id,
           overwrite: true
         )

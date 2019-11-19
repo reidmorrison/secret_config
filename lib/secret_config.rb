@@ -68,5 +68,5 @@ module SecretConfig
   private
 
   @check_env_var = true
-  @filters       = [/password/, "key", /secret_key/]
+  @filters       = [/password/i, /key\Z/i, /passphrase/i]
 end
