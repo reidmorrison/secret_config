@@ -40,10 +40,10 @@ module SecretConfig
             # Using a random formula since this limit is normally only exceeded during a high volume restart period
             # so we want to spread out the retries of the multiple servers.
             retries += 1
-            if retry_limit > retries
+            if retry_count > retries
               sleep_seconds = rand(retry_max_ms) / 1000.0
               logger&.info("SSM Parameter Store GetParametersByPath API Requests throttle exceeded, retry: #{retries}, sleeping #{sleep_seconds} seconds.")
-              sleep(sleep_interval)
+              sleep(sleep_seconds)
               retry
             end
             logger&.info("SSM Parameter Store GetParametersByPath API Requests throttle exceeded, retries exhausted.")
