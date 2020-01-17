@@ -1,4 +1,5 @@
 require_relative 'test_helper'
+require 'socket'
 
 class SecretConfigTest < Minitest::Test
   describe SecretConfig::Providers::File do
@@ -30,6 +31,10 @@ class SecretConfigTest < Minitest::Test
       it 'returns values' do
         assert_equal "secret_config_test", SecretConfig["mysql/database"]
       end
+
+      it 'returns values with interpolation' do
+        assert_equal "#{Socket.gethostname}:27018", SecretConfig["mongo/secondary"]
+      end
     end
 
     describe '#fetch' do
@@ -46,6 +51,10 @@ class SecretConfigTest < Minitest::Test
 
         SecretConfig.use :file, path: path, file_name: file_name
         assert_equal "other", SecretConfig.fetch("mysql/database")
+      end
+
+      it 'returns values with interpolation' do
+        assert_equal "#{Socket.gethostname}:27018", SecretConfig.fetch("mongo/secondary")
       end
     end
   end

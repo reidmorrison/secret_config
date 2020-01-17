@@ -80,6 +80,7 @@ module SecretConfig
       existing_keys = cache.keys
       updated_keys  = []
       provider.each(path) do |key, value|
+        value      = interpolator.parse(value) if value.is_a?(String) && value.include?('%{')
         cache[key] = env_var_override(relative_key(key), value)
         updated_keys << key
       end
@@ -93,6 +94,10 @@ module SecretConfig
     private
 
     attr_reader :cache
+
+    def interpolator
+      @interpolator ||= SettingInterpolator.new
+    end
 
     # Returns the value from an env var if it is present,
     # Otherwise the value is returned unchanged.

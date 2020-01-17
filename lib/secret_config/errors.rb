@@ -10,4 +10,7 @@ module SecretConfig
 
   class ConfigurationError < Error
   end
+
+  class InvalidInterpolation < Error
+  end
 end

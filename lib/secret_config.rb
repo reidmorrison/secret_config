@@ -18,6 +18,8 @@ module SecretConfig
   end
 
   autoload :CLI, "secret_config/cli"
+  autoload :SettingInterpolator, "secret_config/setting_interpolator"
+  autoload :StringInterpolator, "secret_config/string_interpolator"
   autoload :Utils, "secret_config/utils"
 
   class << self

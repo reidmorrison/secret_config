@@ -41,7 +41,7 @@ test:
     mongo:
       database:   secret_config_test
       primary:    127.0.0.1:27017
-      secondary:  127.0.0.1:27018
+      secondary:  "%{hostname}:27018"
 
     secrets:
       secret_key_base: somereallylongteststring

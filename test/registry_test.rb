@@ -1,4 +1,5 @@
 require_relative 'test_helper'
+require 'socket'
 
 class RegistryTest < Minitest::Test
   describe SecretConfig::Registry do
@@ -22,7 +23,7 @@ class RegistryTest < Minitest::Test
       {
         "/test/my_application/mongo/database"               => "secret_config_test",
         "/test/my_application/mongo/primary"                => "127.0.0.1:27017",
-        "/test/my_application/mongo/secondary"              => "127.0.0.1:27018",
+        "/test/my_application/mongo/secondary"              => "#{Socket.gethostname}:27018",
         "/test/my_application/mysql/database"               => "secret_config_test",
         "/test/my_application/mysql/password"               => "secret_configrules",
         "/test/my_application/mysql/username"               => "secret_config",
