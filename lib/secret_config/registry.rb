@@ -32,7 +32,9 @@ module SecretConfig
 
     # Returns [String] configuration value for the supplied key, or nil when missing.
     def [](key)
-      cache[expand_key(key)]
+      value = cache[expand_key(key)]
+      value = env_var_override(key, value) if value.nil?
+      value
     end
 
     # Returns [String] configuration value for the supplied key, or nil when missing.
@@ -78,7 +80,7 @@ module SecretConfig
       existing_keys = cache.keys
       updated_keys  = []
       provider.each(path) do |key, value|
-        cache[key] = env_var_override(key, value)
+        cache[key] = env_var_override(relative_key(key), value)
         updated_keys << key
       end
 
@@ -95,7 +97,9 @@ module SecretConfig
     # Returns the value from an env var if it is present,
     # Otherwise the value is returned unchanged.
     def env_var_override(key, value)
-      env_var_name = relative_key(key).upcase.gsub("/", "_")
+      return value unless SecretConfig.check_env_var?
+
+      env_var_name = key.upcase.gsub("/", "_")
       ENV[env_var_name] || value
     end
 
