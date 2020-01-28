@@ -222,7 +222,7 @@ Note: Do not put any production credentials into this file.
 
 ### Environment Variables
 
-Any of the above values can be overridden with an environment variable.
+Any of the above values can be overridden with an environment variable, unless explicitly configured `SecretConfig.check_env_var = false`.
 
 To overwrite any of these settings with an environment variable:
 

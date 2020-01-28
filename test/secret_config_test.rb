@@ -1,10 +1,10 @@
-require_relative 'test_helper'
-require 'socket'
+require_relative "test_helper"
+require "socket"
 
 class SecretConfigTest < Minitest::Test
   describe SecretConfig::Providers::File do
     let :file_name do
-      File.join(File.dirname(__FILE__), 'config', 'application.yml')
+      File.join(File.dirname(__FILE__), "config", "application.yml")
     end
 
     let :path do
@@ -15,46 +15,55 @@ class SecretConfigTest < Minitest::Test
       SecretConfig.use :file, path: path, file_name: file_name
     end
 
-    describe '#configuration' do
-      it 'returns a copy of the config' do
+    describe "#configuration" do
+      it "returns a copy of the config" do
         assert_equal "127.0.0.1", SecretConfig.configuration.dig("mysql", "host")
       end
     end
 
-    describe '#key?' do
-      it 'has key' do
+    describe "#key?" do
+      it "has key" do
         assert SecretConfig.key?("mysql/database")
       end
     end
 
-    describe '#[]' do
-      it 'returns values' do
+    describe "#[]" do
+      it "returns values" do
         assert_equal "secret_config_test", SecretConfig["mysql/database"]
       end
 
-      it 'returns values with interpolation' do
+      it "returns values with interpolation" do
         assert_equal "#{Socket.gethostname}:27018", SecretConfig["mongo/secondary"]
       end
     end
 
-    describe '#fetch' do
+    describe "#fetch" do
       after do
-        ENV['MYSQL_DATABASE'] = nil
+        ENV["MYSQL_DATABASE"]      = nil
+        SecretConfig.check_env_var = true
       end
 
-      it 'fetches values' do
+      it "fetches values" do
         assert_equal "secret_config_test", SecretConfig.fetch("mysql/database")
       end
 
-      it 'can be overridden by an environment variable' do
-        ENV['MYSQL_DATABASE'] = 'other'
+      it "can be overridden by an environment variable" do
+        ENV["MYSQL_DATABASE"] = "other"
 
         SecretConfig.use :file, path: path, file_name: file_name
         assert_equal "other", SecretConfig.fetch("mysql/database")
       end
 
-      it 'returns values with interpolation' do
+      it "returns values with interpolation" do
         assert_equal "#{Socket.gethostname}:27018", SecretConfig.fetch("mongo/secondary")
+      end
+
+      it "can be omitted an environment variable override with #check_env_var configuration" do
+        ENV["MYSQL_DATABASE"] = "other"
+
+        SecretConfig.check_env_var = false
+        SecretConfig.use :file, path: path, file_name: file_name
+        assert_equal "secret_config_test", SecretConfig.fetch("mysql/database")
       end
     end
   end
