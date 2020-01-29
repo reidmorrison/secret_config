@@ -21,8 +21,8 @@ module SecretConfig
         else
           expr          = $1 || $2 || match.tr("%{}", "")
           key, args_str = expr.split(':')
-          key           = key.to_sym
-          arguments     = args_str&.split(',')&.map { |v| v == '' ? nil : v } || []
+          key           = key.strip.to_sym
+          arguments     = args_str&.split(',')&.map { |v| v.strip == '' ? nil : v.strip } || []
           raise(InvalidInterpolation, "Invalid key: #{key} in string: #{match}") unless respond_to?(key)
           public_send(key, *arguments)
         end
