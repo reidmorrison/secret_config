@@ -32,8 +32,12 @@ module SecretConfig
 
     # Returns [String] configuration value for the supplied key, or nil when missing.
     def [](key)
-      value = cache[expand_key(key)]
-      value = env_var_override(key, value) if value.nil?
+      full_key = expand_key(key)
+      value    = cache[full_key]
+      if value.nil? && SecretConfig.check_env_var?
+        value           = env_var_override(key, value)
+        cache[full_key] = value unless value.nil?
+      end
       value
     end
 
@@ -47,8 +51,7 @@ module SecretConfig
       value = self[key]
       if value.nil?
         raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}") if default == :no_default_supplied
-
-        value = default.respond_to?(:call) ? default.call : default
+        value = block_given? ? yield : default
       end
 
       value = convert_encoding(encoding, value) if encoding
