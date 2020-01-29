@@ -62,7 +62,8 @@ module SecretConfig
           value:     value.to_s,
           type:      "SecureString",
           key_id:    key_id,
-          overwrite: true
+          overwrite: true,
+          tier:      "Intelligent-Tiering"
         )
       end
 
