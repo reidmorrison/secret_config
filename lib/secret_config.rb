@@ -67,8 +67,6 @@ module SecretConfig
     @check_env_var = check_env_var
   end
 
-  private
-
   @check_env_var = true
   @filters       = [/password/i, /key\Z/i, /passphrase/i]
 end
