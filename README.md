@@ -5,6 +5,13 @@ Centralized Configuration and Secrets Management for Ruby and Rails applications
 
 Securely store configuration information centrally, supporting multiple tenants of the same application.
 
+## Overview
+
+Securely store centralized configuration information such as:
+* Settings
+* Passwords
+* Encryption keys and certificates
+
 ## Features
 
 Supports storing configuration information in:
@@ -15,6 +22,17 @@ Supports storing configuration information in:
 * AWS System Manager Parameter Store
     * Encrypt and securely store secrets such as passwords centrally. 
 
+Supported data types:
+* integer
+* float
+* string
+* boolean
+* symbol
+* json
+
+Supported conversions:
+* base64
+
 ## Benefits
 
 Benefits of moving sensitive configuration information into AWS System Manager Parameter Store:
@@ -23,7 +41,7 @@ Benefits of moving sensitive configuration information into AWS System Manager P
     * Environment variables force all config into a single level.
   * Reduces the number of environment variables.
     * In a large application the number of secrets can grow dramatically.
-  * Removes the need to encrypt sensitive data config files.
+  * Replaces sensitive data stored in local yaml or configuration files.
     * Including securing and managing encryption keys.
   * When encryption keys change, such as during a key rotation, config files don't have to be changed.
   * Removes security concerns with placing passwords in the clear into environment variables.
