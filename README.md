@@ -20,7 +20,7 @@ Supports storing configuration information in:
 * Environment Variables
     * Environment Variables take precedence and can be used to override any setting.
 * AWS System Manager Parameter Store
-    * Encrypt and securely store secrets such as passwords centrally. 
+    * Encrypt and securely store secrets such as passwords centrally.
 
 Supported data types:
 * integer
@@ -52,10 +52,10 @@ Benefits of moving sensitive configuration information into AWS System Manager P
   * Configure multiple distinct application instances to support multiple tenants.
     * For example, use separate databases with unique credentials for each tenant.
   * Separation of responsibilities is achieved since operations can manage production configuration.
-    * Developers do not need to be involved with production configuration such as host names and passwords.      
-  * All values are encrypted by default when stored in the AWS Parameter Store. 
+    * Developers do not need to be involved with production configuration such as host names and passwords.
+  * All values are encrypted by default when stored in the AWS Parameter Store.
     * Prevents accidentally not encrypting sensitive data.
-  
+
 ## Introduction
 
 When Secret Config starts up it reads all configuration entries into memory for all keys under the configured path.
@@ -67,7 +67,7 @@ via a process signal, or by calling it through an event, or via a messaging syst
 It is suggested that any programmatic lookup to values stored in Secret Config are called every time a value is
 being used, rather than creating a local copy of the value. This ensures that a refresh of the registry will take effect
 immediately for any code reading from Secret Config.
-  
+
 ## API
 
 When Secret Config starts up it reads all configuration entries immediately for all keys under the configured path.
@@ -83,7 +83,7 @@ Fetch the value for the supplied key, returning nil if not found:
 # Key is present:
 SecretConfig["logger/level"]
 # => "info"
-  
+
 # Key is missing:
 SecretConfig["logger/blah"]
 # => nil
@@ -95,7 +95,7 @@ Fetch the value for the supplied key, raising `SecretConfig::MissingMandatoryKey
 # Key is present:
 SecretConfig.fetch("logger/level")
 # => "info"
-  
+
 # Key is missing:
 SecretConfig.fetch("logger/blah")
 # => SecretConfig::MissingMandatoryKey (Missing configuration value for /development/logger/blah)
@@ -108,7 +108,7 @@ SecretConfig.fetch("logger/level", default: "info")
 # => "info"
 ~~~
 
-Since AWS SSM Parameter store and environment variables only support string values, 
+Since AWS SSM Parameter store and environment variables only support string values,
 it is neccessary to convert the string back to the type required by the program.
 
 The following types are supported:
@@ -136,7 +136,7 @@ specify the encoding as `:base64`
 # Return a value that was stored in Base64 encoding format:
 SecretConfig.fetch("symmetric_encryption/iv")
 # => "FW+/wLubAYM+ZU0bWQj59Q=="
-  
+
 # Base64 decode a value that was stored in Base64 encoding format:
 SecretConfig.fetch("symmetric_encryption/iv", encoding: :base64)
 # => "\x15o\xBF\xC0\xBB\x9B\x01\x83>eM\eY\b\xF9\xF5"
@@ -180,7 +180,7 @@ SecretConfig.refresh!
 ~~~
 
 Example, refresh the registry any time a SIGUSR2 is raised, add the following code on startup:
-      
+
 ~~~ruby
 Signal.trap('USR2') do
   SecretConfig.refresh!
@@ -197,7 +197,7 @@ Where `1234` above is the process PID.
 ## Development and Test use
 
 In the development environment create the file `config/application.yml` within which to store local development credentials.
-Depending on your team setup you may want to use the same file for all developers so can check it into you change control system. 
+Depending on your team setup you may want to use the same file for all developers so can check it into you change control system.
 
 For example: `config/application.yml`
 
@@ -337,7 +337,7 @@ Then the application that uses the above library / gem just needs to add the rel
 
 ~~~yaml
 http_client:
-  url:          https://test.example.com  
+  url:          https://test.example.com
   pool_size:    20
   read_timeout: 300
 ~~~
@@ -346,7 +346,7 @@ This avoids a custom config file just for the above library.
 
 Additionally the values can be overridden with environment variables at any time:
 
-    export HTTP_CLIENT_URL=https://production.example.com  
+    export HTTP_CLIENT_URL=https://production.example.com
 
 ## Configuration
 
@@ -357,15 +357,15 @@ Add the following line to Gemfile
 Out of the box Secret Config will look in the local file system for the file `config/application.yml`
 as covered above. By default it will use env var `RAILS_ENV` to define the path to look under for settings.
 
-The default settings are great for getting started in development and test, but should not be used in production. 
+The default settings are great for getting started in development and test, but should not be used in production.
 
 To ensure Secret Config is configured and available for use within any of the config files, add
-the following lines to the very top of `application.rb` under the line `class Application < Rails::Application`: 
+the following lines to the very top of `application.rb` under the line `class Application < Rails::Application`:
 
 ~~~ruby
 module MyApp
   class Application < Rails::Application
-  
+
     # Add the following lines to configure Secret Config:
     if Rails.env.development? || Rails.env.test?
       # Use 'config/application.yml'
@@ -373,8 +373,8 @@ module MyApp
     else
       # Read configuration from AWS SSM Parameter Store
       config.secret_config.use :ssm, path: "/#{Rails.env}/my_app"
-    end    
-    
+    end
+
     # ....
   end
 end
@@ -388,7 +388,7 @@ By placing the secret config configuration as the very first configuration item,
 configuration item to access the centralized configuration in AWS System Manager Parameter Store.
 
 The environment variable `SECRET_CONFIG_PROVIDER` can be used to override the provider when needed.
-For example: 
+For example:
     `export SECRET_CONFIG_PROVIDER=ssm`
 Or,
     `export SECRET_CONFIG_PROVIDER=file`
@@ -398,31 +398,31 @@ multiple paths. For example:
 
     /production1/my_application
     /production2/my_application
-    
+
     /production/instance1/my_application
     /production/instance2/my_application
-    
+
 The `path` is completely flexible, but must be unique for every AWS account under which the application will run.
 The same `path` can be used in different AWS accounts though. It is also not replicated across regions.
 
-When writing settings to the parameter store, it is recommended to use a custom KMS key to encrypt the values.
-To supply the key to encrypt the values with, add the `key_id` parameter: 
+When writing settings to the parameter store, it is recommended to use a custom KMS key to encrypt the values, if you don't specify a key ID, the system uses the default key associated with your AWS account `alias/aws/ssm`.
+To supply the key to encrypt the values with, add the `key_id` parameter:
 
 ~~~ruby
 module MyApp
   class Application < Rails::Application
-  
+
     # Add the following lines to configure Secret Config:
     if Rails.env.development? || Rails.env.test?
       # Use 'config/application.yml'
       config.secret_config.use :file
     else
       # Read configuration from AWS SSM Parameter Store
-      config.secret_config.use :ssm, 
+      config.secret_config.use :ssm,
         path: "/#{Rails.env}/my_app",
         key_id: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-    end    
-    
+    end
+
     # ....
   end
 end
@@ -430,8 +430,33 @@ end
 
 Note: The relevant KMS key must be created first prior to using it here.
 
-The `key_id` is only used when writing settings to the AWS Parameter store and can be left off when that instance
-will only read from the parameter store.
+`ssm` provider supports various configuration parameters that can be provided as keyword arguments for `config.secret_config.use :ssm, path, **args`
+
+Args hash:
+* **:key_id** (String) - The `key_id` is only used when writing settings to the AWS Parameter store and can be left off when that instance will only read from the parameter store. Can be configred with environment variable `SECRET_CONFIG_KEY_ID`.
+* **:retry_count** (Integer, default=10) - Max number of retries in case of execution failure.
+* **:retry_max_ms** (Integer, default=3_000) - Interval in ms between retries, `sleep` is used to facilitate throttling.
+* any options suported by [Aws::SSM::Client](https://docs.aws.amazon.com/sdkforruby/api/Aws/SSM/Client.html#initialize-instance_method) e.g. **:credentials**:
+~~~ruby
+  config.secret_config.use :ssm,
+    path: "/#{Rails.env}/my_app",
+    key_id: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    credentials: Aws::AssumeRoleCredentials.new(
+      role_arn:          "arn:aws:iam::111111122222222:role/assume_role_name",
+      role_session_name: "session-name-to-identify-#{SecureRandom.uuid}"
+    ))
+~~~
+
+### Secret Config Environment variables
+
+Priority describes when environment variable is used as a default value, preceds configuration value or overrides.
+
+ Name                      | Desctiption                                                     | Priority
+ ------------------------- | --------------------------------------------------------------- | --------
+ `SECRET_CONFIG_PATH`      | path from which the configuration data will be read             | precede
+ `SECRET_CONFIG_PROVIDER`  | override the provider configured for `config.secret_config.use` | override
+ `SECRET_CONFIG_KEY_ID`    | encryption `key_id`                                             | default
+ `SECRET_CONFIG_ACCOUNT_ID`| used in `rspec` to configure AWS Account Id for role assuming   | required
 
 ### Shared configuration for development and test
 
@@ -441,7 +466,7 @@ configuration file `application.yml` can be shared. Update the lines above to:
 ~~~ruby
 module MyApp
   class Application < Rails::Application
-  
+
     # Add the following lines:
     if Rails.env.development? || Rails.env.test?
       # Use 'config/application.yml'
@@ -449,8 +474,8 @@ module MyApp
     else
       # Read configuration from AWS SSM Parameter Store
       config.secret_config.use :ssm, path: "/#{Rails.env}/my_app"
-    end    
-    
+    end
+
     # ....
   end
 end
@@ -503,7 +528,7 @@ development:
 ~~~
 
 Available interpolations:
- 
+
 * %{date}
     * Current date in the format of "%Y%m%d" (CCYYMMDD)
 * %{date:format}
@@ -603,7 +628,7 @@ Key:
 
 #### Export SSM parameters
 
-In AWS SSM Parameter store it can be difficult to 
+In AWS SSM Parameter store it can be difficult to
 Export the values from a specific path into a yaml or json file so that they are easier to read.
 
 Export from a path in AWS SSM Parameter Store to a yaml file, where passwords are filtered:
@@ -632,10 +657,10 @@ Copy configuration from one path in AWS SSM Parameter Store to another path in A
 
 In the multi-tenant example above, we may want to generate a secure random password for each tenant.
 In the source file or registry, set the value to `$random`, this will ensure that during the `import` or `copy`
-that the destination will receive a secure random value. 
+that the destination will receive a secure random value.
 
-By default the length of the randomized value is 32 bytes, use `--random_size` to adjust the length of 
-the randomized string. 
+By default the length of the randomized value is 32 bytes, use `--random_size` to adjust the length of
+the randomized string.
 
 ## Docker
 
@@ -646,7 +671,7 @@ any changes. The only difference being the path that container uses to read its 
 Another important benefit is that the docker image does not contain any production or test credentials since
 these are all stored in AWS SSM Parameter Store.
 
-When a Ruby / Rails application is using Secret Config for its configuration settings, it only requires the 
+When a Ruby / Rails application is using Secret Config for its configuration settings, it only requires the
 following environment variables when starting up the container in for example AWS ECS or AWS Fargate:
 
 ~~~shell
@@ -696,14 +721,14 @@ end
 Specifically for docker containers it is necessary to turn off file logging and turn on logging to standard out
 so that AWS Cloud Watch can pick up the log data.
 
-To start with `logger/destination` of `stdout` will work with regular non-colorized output. When feeding the 
+To start with `logger/destination` of `stdout` will work with regular non-colorized output. When feeding the
 log output into something that can process JSON, set `logger/formatter` to `json`.
 
 The benefit with the above approach is that a developer can pull the exact same container image that is running
 in production and configure it to run locally on their laptop. For example, set `logger/destination` to `file`.
 
 The above code can be modified as necessary to add any Semantic Logger appender to write directly to external
-centralized logging systems, instead of writing to standard out or local files. 
+centralized logging systems, instead of writing to standard out or local files.
 
 ### Email Server and Assets
 
@@ -748,7 +773,7 @@ end
 Using this approach the file `config/symmetric-encryption.yml` can be removed once the keys have been moved to
 the registry.
 
-To extract existing keys from the config file so that they can be imported into the registry, 
+To extract existing keys from the config file so that they can be imported into the registry,
 run the code below inside a console in each of the respective environments.
 
 ~~~ruby
