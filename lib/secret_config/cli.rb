@@ -10,7 +10,7 @@ module SecretConfig
   class CLI
     attr_reader :path, :region, :provider,
                 :export, :no_filter,
-                :import, :key_id, :key_alias, :random_size, :prune, :overwrite,
+                :import, :key_id, :key_alias, :random_size, :prune, :force,
                 :diff_path, :import_path,
                 :fetch_key, :delete_key, :set_key, :set_value, :delete_path,
                 :copy_path, :diff,
@@ -46,6 +46,7 @@ module SecretConfig
       @delete_path  = nil
       @diff_path    = nil
       @import_path  = nil
+      @force        = false
 
       if argv.empty?
         puts parser
@@ -63,13 +64,13 @@ module SecretConfig
       elsif export
         run_export(export, path, filtered: !no_filter)
       elsif import
-        run_import(import, path, prune)
+        run_import(import, path, prune, force)
       elsif import_path
-        run_import_path(import_path, path, prune)
+        run_import_path(import_path, path, prune, force)
       elsif diff
         run_diff(diff, path)
       elsif diff_path
-        run_diff_path(diff, path)
+        run_diff_path(diff_path, path)
       elsif set_key
         run_set(set_key, set_value)
       elsif fetch_key
@@ -152,6 +153,10 @@ module SecretConfig
           @prune = true
         end
 
+        opts.on "--force", "During import overwrite all values, not just the changed ones. Useful for changing the KMS key. Only applies to --import and --import-path." do
+          @force = true
+        end
+
         opts.on "--key_id KEY_ID", "Encrypt config settings with this AWS KMS key id. Default: AWS Default key." do |key_id|
           @key_id = key_id
         end
@@ -182,14 +187,15 @@ module SecretConfig
     private
 
     def provider_instance
-      @provider_instance ||= begin
-        case provider
-        when :ssm
-          Providers::Ssm.new(key_id: key_id, key_alias: key_alias)
-        else
-          raise ArgumentError, "Invalid provider: #{provider}"
+      @provider_instance ||=
+        begin
+          case provider
+          when :ssm
+            Providers::Ssm.new(key_id: key_id, key_alias: key_alias)
+          else
+            raise ArgumentError, "Invalid provider: #{provider}"
+          end
         end
-      end
     end
 
     def run_export(file_name, path, filtered: true)
@@ -201,20 +207,20 @@ module SecretConfig
       puts("Exported #{path} from #{provider} to #{file_name}") if file_name.is_a?(String)
     end
 
-    def run_import(file_name, path, prune = false)
+    def run_import(file_name, path, prune, force)
       raise(ArgumentError, "Missing required option --path") unless path
 
       config = read_config_file(file_name)
-      import_config(config, path, prune)
+      import_config(config, path, prune, force)
 
       puts("Imported #{file_name} to #{path} on provider: #{provider}") if file_name.is_a?(String)
     end
 
-    def run_import_path(source_path, path, prune = false)
+    def run_import_path(source_path, path, prune, force)
       raise(ArgumentError, "Missing required option --path") unless path
 
       config = fetch_config(source_path, filtered: false)
-      import_config(config, path, prune)
+      import_config(config, path, prune, force)
 
       puts("Imported #{source_path} to #{path} on provider: #{provider}")
     end
@@ -236,10 +242,10 @@ module SecretConfig
       raise(ArgumentError, "Missing required option --path") unless path
 
       source_config = fetch_config(source_path, filtered: false)
-      source        = Utils.flatten(source_config, path)
+      source        = Utils.flatten(source_config)
 
       target_config = fetch_config(path, filtered: false)
-      target        = Utils.flatten(target_config, path)
+      target        = Utils.flatten(target_config)
 
       puts("Comparing #{source_path} to #{path} on provider: #{provider}")
       diff_config(source, target)
@@ -251,6 +257,15 @@ module SecretConfig
 
     def run_delete(key)
       provider_instance.delete(key)
+    end
+
+    def run_delete_path(path)
+      source_config = fetch_config(path)
+      source        = Utils.flatten(source_config, path)
+      source.each_key do |key|
+        puts("Deleting #{key}")
+        provider_instance.delete(key)
+      end
     end
 
     def run_fetch(key)
@@ -319,7 +334,7 @@ module SecretConfig
       end
     end
 
-    def import_config(config, path, prune = false)
+    def import_config(config, path, prune, force)
       raise(ArgumentError, "Missing required option --path") unless path
 
       delete_keys = prune ? current_values.keys - Utils.flatten(config, path).keys : []
@@ -330,7 +345,7 @@ module SecretConfig
         sleep(5)
       end
 
-      set_config(config, path, current_values)
+      set_config(config, path, force ? {} : current_values)
 
       delete_keys.each do |key|
         puts "Deleting: #{key}"
