@@ -10,7 +10,13 @@ module SecretConfig
     class Ssm < Provider
       attr_reader :client, :key_id, :retry_count, :retry_max_ms, :logger
 
-      def initialize(key_id: ENV["AWS_ACCESS_KEY_ID"], key_alias: ENV["AWS_ACCESS_KEY_ALIAS"], retry_count: 10, retry_max_ms: 3_000)
+      def initialize(
+        key_id: ENV["SECRET_CONFIG_KEY_ID"],
+        key_alias: ENV["SECRET_CONFIG_KEY_ALIAS"],
+        retry_count: 10,
+        retry_max_ms: 3_000,
+        **args
+      )
         @key_id       =
           if key_alias
             key_alias =~ %r{^alias/} ? key_alias : "alias/#{key_alias}"
@@ -20,7 +26,7 @@ module SecretConfig
         @retry_count  = retry_count
         @retry_max_ms = retry_max_ms
         @logger       = SemanticLogger["Aws::SSM"] if defined?(SemanticLogger)
-        @client       = Aws::SSM::Client.new(logger: logger)
+        @client       = Aws::SSM::Client.new({logger: logger}.merge!(args))
       end
 
       def each(path)
