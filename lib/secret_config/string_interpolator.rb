@@ -16,14 +16,15 @@ module SecretConfig
 
     def parse(string)
       string.gsub(/%{1,2}\{([^}]+)\}/) do |match|
-        if match.start_with?('%%')
+        if match.start_with?("%%")
           match[1..-1]
         else
-          expr          = $1 || $2 || match.tr("%{}", "")
-          key, args_str = expr.split(':')
+          expr          = Regexp.last_match(1) || Regexp.last_match(2) || match.tr("%{}", "")
+          key, args_str = expr.split(":")
           key           = key.strip.to_sym
-          arguments     = args_str&.split(',')&.map { |v| v.strip == '' ? nil : v.strip } || []
+          arguments     = args_str&.split(",")&.map { |v| v.strip == "" ? nil : v.strip } || []
           raise(InvalidInterpolation, "Invalid key: #{key} in string: #{match}") unless respond_to?(key)
+
           public_send(key, *arguments)
         end
       end

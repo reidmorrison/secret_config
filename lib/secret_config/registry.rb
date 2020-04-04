@@ -51,6 +51,7 @@ module SecretConfig
       value = self[key]
       if value.nil?
         raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}") if default == :no_default_supplied
+
         value = block_given? ? yield : default
       end
 
@@ -83,7 +84,7 @@ module SecretConfig
       existing_keys = cache.keys
       updated_keys  = []
       provider.each(path) do |key, value|
-        value      = interpolator.parse(value) if value.is_a?(String) && value.include?('%{')
+        value      = interpolator.parse(value) if value.is_a?(String) && value.include?("%{")
         cache[key] = env_var_override(relative_key(key), value)
         updated_keys << key
       end

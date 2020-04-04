@@ -3,17 +3,18 @@ bundler_args: --without development
 
 rvm:
   - 2.3.8
-  - 2.4.6
-  - 2.5.5
-  - 2.6.3
-  - jruby-9.2.7.0
+  - 2.4.10
+  - 2.5.8
+  - 2.6.6
+  - 2.7.1
+  - jruby-9.2.11.1
 
 matrix:
   allow_failures:
-    - rvm: jruby-9.2.7.0
+    - rvm: jruby-9.2.11.1
 
 jdk:
-  - openjdk10
+  - openjdk9
 
 sudo: false
 

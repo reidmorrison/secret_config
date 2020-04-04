@@ -1,4 +1,4 @@
-require_relative 'test_helper'
+require_relative "test_helper"
 
 class UtilsTest < Minitest::Test
   describe SecretConfig::Utils do
@@ -9,7 +9,7 @@ class UtilsTest < Minitest::Test
         "test/my_application/mysql/username"          => "secret_config",
         "test/my_application/mysql/host"              => "127.0.0.1",
         "test/my_application/secrets"                 => "both_a_path_and_a_value",
-        "test/my_application/secrets/secret_key_base" => "somereallylongteststring",
+        "test/my_application/secrets/secret_key_base" => "somereallylongteststring"
       }
     end
 
@@ -17,8 +17,8 @@ class UtilsTest < Minitest::Test
       SecretConfig::Utils.hierarchical(flat_registry)
     end
 
-    describe '.flatten' do
-      it 'returns a copy of the config' do
+    describe ".flatten" do
+      it "returns a copy of the config" do
         h = SecretConfig::Utils.flatten(hash_registry, path = nil)
         assert_equal(flat_registry, h)
       end

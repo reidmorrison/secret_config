@@ -34,7 +34,7 @@ module SecretConfig
         h[key] = value
         return h
       end
-      last       = full_path.split("/").reduce(h) do |target, path|
+      last = full_path.split("/").reduce(h) do |target, path|
         if path == ""
           target
         elsif target.key?(path)

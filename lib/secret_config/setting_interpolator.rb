@@ -1,6 +1,6 @@
-require 'date'
-require 'socket'
-require 'securerandom'
+require "date"
+require "socket"
+require "securerandom"
 # * SecretConfig Interpolations
 #
 # Expanding values inline for date, time, hostname, pid and random values.
@@ -35,7 +35,7 @@ module SecretConfig
 
     def hostname(format = nil)
       name = Socket.gethostname
-      name = name.split('.')[0] if format == "short"
+      name = name.split(".")[0] if format == "short"
       name
     end
 
@@ -47,12 +47,12 @@ module SecretConfig
       SecureRandom.urlsafe_base64(size)
     end
 
-    #def fetch(key)
+    # def fetch(key)
     #  SecretConfig[key]
-    #end
+    # end
     #
-    #def include(path)
+    # def include(path)
     #
-    #end
+    # end
   end
 end

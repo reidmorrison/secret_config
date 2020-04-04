@@ -1,10 +1,10 @@
-require_relative '../test_helper'
+require_relative "../test_helper"
 
 module Providers
   class FileTest < Minitest::Test
     describe SecretConfig::Providers::File do
       let :file_name do
-        File.join(File.dirname(__FILE__), '..', 'config', 'application.yml')
+        File.join(File.dirname(__FILE__), "..", "config", "application.yml")
       end
 
       let :path do
@@ -27,8 +27,8 @@ module Providers
         }
       end
 
-      describe '#each' do
-        it 'file' do
+      describe "#each" do
+        it "file" do
           file_provider = SecretConfig::Providers::File.new(file_name: file_name)
           paths         = {}
           file_provider.each(path) { |key, value| paths[key] = value }
