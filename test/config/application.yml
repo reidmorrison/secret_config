@@ -1,9 +1,5 @@
 # Local application config goes here.  Do not check in production secrets.
 # These are for development and test only.
-
-#
-# Development - Local - Root: '/test/my_application'
-#
 development:
   my_application:
     symmetric_encryption:
@@ -37,6 +33,10 @@ test:
       username:   secret_config
       password:   secret_configrules
       host:       127.0.0.1
+      ports:      "12345,5343,26815"
+      ports2:     "    12345, 5343 ,  26815"
+      hostnames:  "primary.example.net,secondary.example.net,backup.example.net"
+      hostnames2: "   primary.example.net,  secondary.example.net ,  backup.example.net"
 
     mongo:
       database:   secret_config_test

@@ -29,6 +29,7 @@ module SecretConfig
         @client       = Aws::SSM::Client.new({logger: logger}.merge!(args))
       end
 
+      # Yields the key with its absolute path and corresponding string value
       def each(path)
         retries = 0
         token   = nil

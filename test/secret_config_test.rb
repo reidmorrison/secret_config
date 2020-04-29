@@ -15,19 +15,19 @@ class SecretConfigTest < Minitest::Test
       SecretConfig.use :file, path: path, file_name: file_name
     end
 
-    describe "#configuration" do
+    describe ".configuration" do
       it "returns a copy of the config" do
         assert_equal "127.0.0.1", SecretConfig.configuration.dig("mysql", "host")
       end
     end
 
-    describe "#key?" do
+    describe ".key?" do
       it "has key" do
         assert SecretConfig.key?("mysql/database")
       end
     end
 
-    describe "#[]" do
+    describe ".[]" do
       it "returns values" do
         assert_equal "secret_config_test", SecretConfig["mysql/database"]
       end
@@ -37,7 +37,7 @@ class SecretConfigTest < Minitest::Test
       end
     end
 
-    describe "#fetch" do
+    describe ".fetch" do
       after do
         ENV["MYSQL_DATABASE"]      = nil
         SecretConfig.check_env_var = true
@@ -66,5 +66,36 @@ class SecretConfigTest < Minitest::Test
         assert_equal "secret_config_test", SecretConfig.fetch("mysql/database")
       end
     end
+
+    describe ".configure" do
+      before do
+        SecretConfig.use :file, path: path, file_name: file_name
+      end
+
+      it "#fetch" do
+        database = nil
+        SecretConfig.configure("mysql") do |config|
+          database = config.fetch("database")
+        end
+        assert_equal "secret_config_test", database
+      end
+
+      it "#[]" do
+        database = nil
+        SecretConfig.configure("mysql") do |config|
+          database = config["database"]
+        end
+        assert_equal "secret_config_test", database
+      end
+
+      it "#key?" do
+        database = nil
+        SecretConfig.configure("mysql") do |config|
+          database = config.key?("database")
+        end
+        assert_equal true, database
+      end
+    end
+
   end
 end

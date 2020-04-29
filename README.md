@@ -22,7 +22,8 @@ Supports storing configuration information in:
 * AWS System Manager Parameter Store
     * Encrypt and securely store secrets such as passwords centrally.
 
-Supported data types:
+Since all values are stored as strings in the central directory or config file, the following type conversions 
+are supported:
 * integer
 * float
 * string
@@ -32,6 +33,8 @@ Supported data types:
 
 Supported conversions:
 * base64
+
+Arrays are also supported when the value contains a known separator by which to break down the values.
 
 ## Benefits
 
@@ -127,6 +130,20 @@ SecretConfig.fetch("symmetric_encryption/version")
 # With type conversion:
 SecretConfig.fetch("symmetric_encryption/version", type: :integer)
 # => 0
+~~~
+
+Sometimes it is useful to store arrays of values as a single key.  
+
+~~~ruby
+# Example: A list of host names could be stored as: "primary.example.net,secondary.example.net,backup.example.net"
+# To extract it as an array of strings: 
+SecretConfig.fetch("address_services/hostnames", separator: ",")
+# => ["primary.example.net", "secondary.example.net", "backup.example.net"]
+
+# Example: A list of ports could be stored as: "12345,5343,26815"
+# To extract it as an array of Integers: 
+SecretConfig.fetch("address_services/ports", type: :integer, separator: ",")
+# => [12345, 5343, 26815]
 ~~~
 
 When storing binary data, it should be encoded with strict base64 encoding. To automatically convert it back to binary

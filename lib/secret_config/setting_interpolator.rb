@@ -14,11 +14,6 @@ require "securerandom"
 #   %{pid}            # Process Id for this process.
 #   %{random}         # URL safe Random 32 byte value.
 #   %{random:size}    # URL safe Random value of `size` bytes.
-#
-# Retrieve values elsewhere in the registry.
-# Paths can be relative to the current root, or absolute paths outside the current root.
-#   %{fetch:key}      # Fetches a single value from a relative or absolute path
-#   %{include:path}   # Fetches a path of keys and values
 module SecretConfig
   class SettingInterpolator < StringInterpolator
     def date(format = "%Y%m%d")
@@ -46,13 +41,5 @@ module SecretConfig
     def random(size = 32)
       SecureRandom.urlsafe_base64(size)
     end
-
-    # def fetch(key)
-    #  SecretConfig[key]
-    # end
-    #
-    # def include(path)
-    #
-    # end
   end
 end

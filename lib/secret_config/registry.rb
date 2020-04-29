@@ -20,10 +20,14 @@ module SecretConfig
     end
 
     # Returns [Hash] a copy of the in memory configuration data.
-    def configuration(relative: true, filters: SecretConfig.filters)
+    #
+    # Supply the relative path to start from so that only keys and values in that
+    # path will be returned.
+    def configuration(path: nil, filters: SecretConfig.filters)
       h = {}
       cache.each_pair do |key, value|
-        key   = relative_key(key) if relative
+        next if path && !key.start_with?(path)
+
         value = filter_value(key, value, filters)
         Utils.decompose(key, value, h)
       end
@@ -32,22 +36,22 @@ module SecretConfig
 
     # Returns [String] configuration value for the supplied key, or nil when missing.
     def [](key)
-      full_key = expand_key(key)
-      value    = cache[full_key]
+      value = cache[key]
       if value.nil? && SecretConfig.check_env_var?
-        value           = env_var_override(key, value)
-        cache[full_key] = value unless value.nil?
+        value      = env_var_override(key, value)
+        cache[key] = value unless value.nil?
       end
-      value
+      value.nil? ? nil : value.to_s
     end
 
     # Returns [String] configuration value for the supplied key, or nil when missing.
     def key?(key)
-      cache.key?(expand_key(key))
+      cache.key?(key)
     end
 
     # Returns [String] configuration value for the supplied key
-    def fetch(key, default: :no_default_supplied, type: :string, encoding: nil)
+    # Convert the string value into an array of values by supplying a `separator`.
+    def fetch(key, default: :no_default_supplied, type: :string, encoding: nil, separator: nil)
       value = self[key]
       if value.nil?
         raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}") if default == :no_default_supplied
@@ -56,7 +60,12 @@ module SecretConfig
       end
 
       value = convert_encoding(encoding, value) if encoding
-      type == :string ? value : convert_type(type, value)
+
+      if separator
+        value.to_s.split(separator).collect { |element| convert_type(type, element.strip) }
+      else
+        convert_type(type, value)
+      end
     end
 
     # Set the value for a key in the centralized configuration store.
@@ -66,26 +75,25 @@ module SecretConfig
 
     # Set the value for a key in the centralized configuration store.
     def set(key, value)
-      key = expand_key(key)
-      provider.set(key, value)
+      full_key = expand_key(key)
+      provider.set(full_key, value)
       cache[key] = value
     end
 
     # Delete a key from the centralized configuration store.
     def delete(key)
-      key = expand_key(key)
-      provider.delete(key)
+      full_key = expand_key(key)
+      provider.delete(full_key)
       cache.delete(key)
     end
 
     # Refresh the in-memory cached copy of the centralized configuration information.
-    # Environment variable values will take precendence over the central store values.
+    # Environment variable values will take precedence over the central store values.
     def refresh!
       existing_keys = cache.keys
       updated_keys  = []
-      provider.each(path) do |key, value|
-        value      = interpolator.parse(value) if value.is_a?(String) && value.include?("%{")
-        cache[key] = env_var_override(relative_key(key), value)
+      fetch_path(path).each_pair do |key, value|
+        cache[key] = env_var_override(key, value)
         updated_keys << key
       end
 
@@ -99,8 +107,17 @@ module SecretConfig
 
     attr_reader :cache
 
-    def interpolator
-      @interpolator ||= SettingInterpolator.new
+    # Returns [true|false] whether the supplied key is considered a relative key.
+    def relative_key?(key)
+      !key.start_with?("/")
+    end
+
+    # Returns a flat path of keys and values from the provider without looking in the local path.
+    # Keys are returned with path names relative to the supplied path.
+    def fetch_path(path)
+      parser = Parser.new(path, self)
+      provider.each(path) { |key, value| parser.parse(key, value) }
+      parser.render
     end
 
     # Returns the value from an env var if it is present,
@@ -114,12 +131,7 @@ module SecretConfig
 
     # Add the path to the path if it is a relative path.
     def expand_key(key)
-      key.start_with?("/") ? key : "#{path}/#{key}"
-    end
-
-    # Convert the key to a relative path by removing the path.
-    def relative_key(key)
-      key.start_with?("/") ? key.sub("#{path}/", "") : key
+      relative_key?(key) ? "#{path}/#{key}" : key
     end
 
     def filter_value(key, value, filters)
@@ -141,12 +153,12 @@ module SecretConfig
 
     def convert_type(type, value)
       case type
+      when :string
+        value.to_s
       when :integer
         value.to_i
       when :float
         value.to_f
-      when :string
-        value
       when :boolean
         %w[true 1 t].include?(value.to_s.downcase)
       when :symbol
@@ -172,7 +184,7 @@ module SecretConfig
 
       raise(UndefinedRootError, "Either set env var 'SECRET_CONFIG_PATH' or call SecretConfig.use") unless path
 
-      path.start_with?("/") ? path : "/#{path}"
+      relative_key?(path) ? "/#{path}" : path
     end
 
     def default_provider(provider)

@@ -18,6 +18,8 @@ module SecretConfig
   end
 
   autoload :CLI, "secret_config/cli"
+  autoload :Config, "secret_config/config"
+  autoload :Parser, "secret_config/parser"
   autoload :SettingInterpolator, "secret_config/setting_interpolator"
   autoload :StringInterpolator, "secret_config/string_interpolator"
   autoload :Utils, "secret_config/utils"
@@ -30,7 +32,6 @@ module SecretConfig
     def_delegator :registry, :[]
     def_delegator :registry, :[]=
     def_delegator :registry, :key?
-    def_delegator :registry, :fetch
     def_delegator :registry, :set
     def_delegator :registry, :delete
     def_delegator :registry, :refresh!
@@ -40,6 +41,34 @@ module SecretConfig
   # The path will be overriden by env var `SECRET_CONFIG_PATH` if present.
   def self.use(provider, path: nil, **args)
     @registry = SecretConfig::Registry.new(path: path, provider: provider, provider_args: args)
+  end
+
+  # Fetch configuration in a block by supplying the root path once.
+  #
+  # Example:
+  #   SecretConfig.configure("suppliers/kafka_service") do |config|
+  #     Kafka::Client.new(
+  #       seed_brokers:       config.fetch("brokers", separator: ","),
+  #       delivery_interval:  config.fetch("delivery_interval", type: :integer, default: 0),
+  #       delivery_threshold: config.fetch("delivery_threshold", type: :integer, default: 0),
+  #       max_queue_size:     config.fetch("max_queue_size", type: :integer, default: 10_000),
+  #       max_retries:        config.fetch("max_retries", type: :integer, default: -1),
+  #       retry_backoffs:     config.fetch("retry_backoff", type: :integer, default: 0),
+  #     )
+  #   end
+  #
+  # If `SecretConfig.configure` was not used it would have looked like:
+  #   Kafka::Client.new(
+  #     seed_brokers:       SecretConfig.fetch("suppliers/kafka_service/brokers", separator: ","),
+  #     delivery_interval:  SecretConfig.fetch("suppliers/kafka_service/delivery_interval", type: :integer, default: 0),
+  #     delivery_threshold: SecretConfig.fetch("suppliers/kafka_service/delivery_threshold", type: :integer, default: 0),
+  #     max_queue_size:     SecretConfig.fetch("suppliers/kafka_service/max_queue_size", type: :integer, default: 10_000),
+  #     max_retries:        SecretConfig.fetch("suppliers/kafka_service/max_retries", type: :integer, default: -1),
+  #     retry_backoffs:     SecretConfig.fetch("suppliers/kafka_service/retry_backoff", type: :integer, default: 0),
+  #   )
+  def self.configure(path)
+    config = Config.new(path, registry)
+    yield(config)
   end
 
   # Returns the global registry.

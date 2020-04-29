@@ -28,9 +28,13 @@ class RegistryTest < Minitest::Test
         "/test/my_application/mysql/password"               => "secret_configrules",
         "/test/my_application/mysql/username"               => "secret_config",
         "/test/my_application/mysql/host"                   => "127.0.0.1",
+        "/test/my_application/mysql/ports"                  => "12345,5343,26815",
+        "/test/my_application/mysql/ports2"                 => "    12345, 5343 ,  26815",
+        "/test/my_application/mysql/hostnames"              => "primary.example.net,secondary.example.net,backup.example.net",
+        "/test/my_application/mysql/hostnames2"             => "   primary.example.net,  secondary.example.net ,  backup.example.net",
         "/test/my_application/secrets/secret_key_base"      => "somereallylongteststring",
         "/test/my_application/symmetric_encryption/key"     => "QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=",
-        "/test/my_application/symmetric_encryption/version" => 2,
+        "/test/my_application/symmetric_encryption/version" => "2",
         "/test/my_application/symmetric_encryption/iv"      => "QUJDREVGMTIzNDU2Nzg5MA=="
       }
     end
@@ -113,6 +117,28 @@ class RegistryTest < Minitest::Test
 
       it "converts to integer" do
         assert_equal 2, registry.fetch("symmetric_encryption/version", type: :integer)
+      end
+
+      describe "uses separator to extract an array" do
+        it "of strings" do
+          value = registry.fetch("mysql/hostnames", separator: ",")
+          assert_equal ["primary.example.net", "secondary.example.net", "backup.example.net"], value
+        end
+
+        it "of strings with spaces" do
+          value = registry.fetch("mysql/hostnames2", separator: ",")
+          assert_equal ["primary.example.net", "secondary.example.net", "backup.example.net"], value
+        end
+
+        it "of integers" do
+          value = registry.fetch("mysql/ports", type: :integer, separator: ",")
+          assert_equal([12345, 5343, 26815], value)
+        end
+
+        it "of integers with spaces" do
+          value = registry.fetch("mysql/ports2", type: :integer, separator: ",")
+          assert_equal([12345, 5343, 26815], value)
+        end
       end
 
       it "decodes Base 64" do
