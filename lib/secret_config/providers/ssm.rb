@@ -13,8 +13,8 @@ module SecretConfig
       def initialize(
         key_id: ENV["SECRET_CONFIG_KEY_ID"],
         key_alias: ENV["SECRET_CONFIG_KEY_ALIAS"],
-        retry_count: 10,
-        retry_max_ms: 3_000,
+        retry_count: 25,
+        retry_max_ms: 10_000,
         **args
       )
         @key_id       =

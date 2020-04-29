@@ -27,6 +27,10 @@ test:
       key:     QUJDREVGMTIzNDU2Nzg5MEFCQ0RFRjEyMzQ1Njc4OTA=
       iv:      QUJDREVGMTIzNDU2Nzg5MA==
       version: 2
+      previous_key:
+        key:     key1
+        iv:      iv1
+        version: 1
 
     mysql:
       database:   secret_config_test
@@ -45,3 +49,29 @@ test:
 
     secrets:
       secret_key_base: somereallylongteststring
+
+  other_application:
+    symmetric_encryption:
+      version:    3
+      __import__: /test/my_application/symmetric_encryption
+      iv:         MTIzNDU2Nzg5MEFCQ0RFRg==
+      previous_key:
+        key:     key0
+
+    mysql:
+#      database:   "%{fetch: /test/my_application/mysql/database }"
+      username:   other
+      password:   otherrules
+      host:       "%{hostname}"
+
+    mongo:
+      database:   secret_config_test
+      primary:    localhost:27017
+      secondary:  "%{hostname}:27018"
+
+    mongo2:
+      __import__: mongo
+      database:   secret_config_test2
+
+    mongo3:
+      __import__: mongo

@@ -3,10 +3,11 @@ module SecretConfig
     attr_reader :tree, :path, :registry, :interpolator
 
     def initialize(path, registry)
+      @path         = path
+      @registry     = registry
       @fetch_list   = {}
       @import_list  = {}
       @tree         = {}
-      @path         = path
       @interpolator = SettingInterpolator.new
     end
 
@@ -20,30 +21,50 @@ module SecretConfig
     # Returns a flat Hash of the rendered paths.
     def render
       # apply_fetches
-      # apply_imports
+      apply_imports
       tree
     end
 
     private
 
     # def apply_fetches
-    #   interpolator.fetch_list.each_pair do |key, fetch_key|
-    #     tree[key] = relative_key?(fetch_key) ? registry[fetch_key] : registry.provider.fetch(fetch_key)
-    #   end
+    #   tree[key] = relative_key?(fetch_key) ? registry[fetch_key] : registry.provider.fetch(fetch_key)
     # end
 
-    # Imports cannot reference other imports at this time.
-    # def apply_imports
-    #   interpolator.import_list.each_pair do |key, import_key|
-    #     relative_paths =
-    #       if relative_key?(import_key)
-    #         registry.configuration(path: import_key, relative: true, filters: nil)
-    #       else
-    #         registry.fetch_path(import_key)
-    #       end
-    #     relative_paths.each_pair { |relative_key, value| tree[::File.join(key, relative_key)] = value }
-    #   end
-    # end
+    # Import from the current registry as well as new fetches.
+    #
+    # Notes:
+    # - A lot of absolute key lookups can be expensive since each one is a separate call.
+    # - Imports cannot reference other imports at this time.
+    def apply_imports
+      tree.keys.each do |key|
+        next unless key =~ /\/__import__\Z/
+
+        import_key = tree.delete(key)
+        key, _     = ::File.split(key)
+
+        # binding.irb
+
+        # With a relative key, look for the values in the current registry.
+        # With an absolute key call the provider and fetch the value directly.
+
+        if relative_key?(import_key)
+          tree.keys.each do |current_key|
+            match = current_key.match(/\A#{import_key}\/(.*)/)
+            next unless match
+
+            imported_key       = ::File.join(key, match[1])
+            tree[imported_key] = tree[current_key] unless tree.key?(imported_key)
+          end
+        else
+          relative_paths = registry.send(:fetch_path, import_key)
+          relative_paths.each_pair do |relative_key, value|
+            imported_key       = ::File.join(key, relative_key)
+            tree[imported_key] = value unless tree.key?(imported_key)
+          end
+        end
+      end
+    end
 
     # Returns [true|false] whether the supplied key is considered a relative key.
     def relative_key?(key)
