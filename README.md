@@ -5,6 +5,14 @@ Centralized Configuration and Secrets Management for Ruby and Rails applications
 
 Securely store configuration information centrally, supporting multiple tenants of the same application.
 
+## v0.9 Upgrade Notes
+
+Note that the command line program name has changed from `secret_config` to `secret-config`. 
+Be careful that the arguments have also changed. The arguments are now consistent across operations.
+The command line examples below have also been updated to reflect the changes. 
+ 
+Please run `secret-config --help` to see the new arguments and updated operations.  
+
 ## Overview
 
 Securely store centralized configuration information such as:
@@ -579,7 +587,7 @@ Available interpolations:
 Secret Config has a command line interface for exporting, importing and copying between paths in the registry.
 
 ~~~
-secret_config [options]
+secret-config [options]
     -e, --export [FILE_NAME]         Export configuration to a file or stdout if no file_name supplied.
     -i, --import [FILE_NAME]         Import configuration from a file or stdin if no file_name supplied.
     -C, --copy SOURCE_PATH           Import configuration from a file or stdin if no file_name supplied.
@@ -624,18 +632,22 @@ secrets:
 
 Import a yaml file, into a path in AWS SSM Parameter Store:
 
-    secret_config --import production.yml --path /production/my_application
+    secret-config --import /production/my_application --path  production.yml
 
 Import a yaml file, into a path in AWS SSM Parameter Store, using a custom KMS key to encrypt the values:
 
-    secret_config --import production.yml --path /production/my_application --key_id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    secret-config --import /production/my_application --path production.yml --key_id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+Import a yaml file, into a path in AWS SSM Parameter Store, using a custom KMS key alias to encrypt the values:
+
+    secret-config --import /production/my_application --path production.yml --key_alias my_key_alias
 
 #### Diff
 
 Before importing a new config file into the AWS SSM Parameter store, a diff can be performed to determine
 what the differences are that will be applied when the import is run with the `--prune` option.
 
-    secret_config --diff production.yml --path /production/my_application
+    secret-config --diff /production/my_application --path production.yml 
 
 Key:
 
@@ -650,15 +662,15 @@ Export the values from a specific path into a yaml or json file so that they are
 
 Export from a path in AWS SSM Parameter Store to a yaml file, where passwords are filtered:
 
-    secret_config --export production.yml --path /production/my_application
+    secret-config --export /production/my_application --file production.yml 
 
 Export from a path in AWS SSM Parameter Store to a yaml file, _without_ filtering out passwords:
 
-    secret_config --export production.yml --path /production/my_application --no-filter
+    secret-config --export /production/my_application --file production.yml --no-filter
 
 Export from a path in AWS SSM Parameter Store to a json file, where passwords are filtered:
 
-    secret_config --export production.json --path /production/my_application
+    secret-config --export /production/my_application --file production.json 
 
 #### Copy values between paths in AWS SSM parameter store
 
@@ -666,9 +678,9 @@ It can be useful to keep a "master" copy of the values for an environment or sta
 in AWS Parameter Store. Then for each stack or environment that is spun up, copy the "master" / "common" values
 into the new path. Once copied the values specific to that path can be updated accordingly.
 
-Copy configuration from one path in AWS SSM Parameter Store to another path in AWS SSM Parameter Store:
+Import configuration from an existing path in AWS SSM Parameter Store into another:
 
-    secret_config --copy /production/my_application --path /tenant73/my_application
+    secret-config --import /tenant73/my_application --path /production/my_application 
 
 #### Generating random passwords
 

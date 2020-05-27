@@ -116,7 +116,6 @@ module SecretConfig
     # Returns a flat path of keys and values from the provider without looking in the local path.
     # Keys are returned with path names relative to the supplied path.
     def fetch_path(path)
-      puts "PATH: #{path}"
       parser = Parser.new(path, self, interpolate: interpolate)
       provider.each(path) { |key, value| parser.parse(key, value) }
       parser.render

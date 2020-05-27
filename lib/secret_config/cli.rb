@@ -8,11 +8,29 @@ require "irb"
 
 module SecretConfig
   class CLI
-    attr_reader :path, :region, :provider,
+    module Colors
+      CLEAR   = "\e[0m".freeze
+      BOLD    = "\e[1m".freeze
+      BLACK   = "\e[30m".freeze
+      RED     = "\e[31m".freeze
+      GREEN   = "\e[32m".freeze
+      YELLOW  = "\e[33m".freeze
+      BLUE    = "\e[34m".freeze
+      MAGENTA = "\e[35m".freeze
+      CYAN    = "\e[36m".freeze
+      WHITE   = "\e[37m".freeze
+
+      TITLE  = "\e[1m".freeze
+      KEY    = "\e[36m".freeze
+      REMOVE = "\e[31m".freeze
+      ADD    = "\e[32m".freeze
+    end
+
+    attr_reader :path, :provider, :file_name,
                 :export, :no_filter, :interpolate,
                 :import, :key_id, :key_alias, :random_size, :prune, :force,
                 :diff_path, :import_path,
-                :fetch_key, :delete_key, :set_key, :set_value, :delete_path,
+                :fetch_key, :delete_key, :set_key, :set_value, :delete_tree,
                 :copy_path, :diff,
                 :console,
                 :show_version
@@ -29,7 +47,6 @@ module SecretConfig
       @path         = nil
       @key_id       = nil
       @key_alias    = nil
-      @region       = ENV["AWS_REGION"]
       @provider     = :ssm
       @random_size  = 32
       @no_filter    = false
@@ -43,7 +60,7 @@ module SecretConfig
       @set_value    = nil
       @fetch_key    = nil
       @delete_key   = nil
-      @delete_path  = nil
+      @delete_tree  = nil
       @diff_path    = nil
       @import_path  = nil
       @force        = false
@@ -59,27 +76,32 @@ module SecretConfig
     def run!
       if show_version
         puts "Secret Config v#{VERSION}"
-        puts "Region: #{region}"
       elsif console
         run_console
       elsif export
-        run_export(export, path, filtered: !no_filter)
+        raise(ArgumentError, "--path option is not valid for --export") if path
+
+        run_export(export, file_name || STDOUT, filtered: !no_filter)
       elsif import
-        run_import(import, path, prune, force)
-      elsif import_path
-        run_import_path(import_path, path, prune, force)
+        if path
+          run_import_path(import, path, prune, force)
+        else
+          run_import(import, file_name || STDIN, prune, force)
+        end
       elsif diff
-        run_diff(diff, path)
-      elsif diff_path
-        run_diff_path(diff_path, path)
+        if path
+          run_diff_path(diff, path)
+        else
+          run_diff(diff, file_name || STDIN)
+        end
       elsif set_key
         run_set(set_key, set_value)
       elsif fetch_key
         run_fetch(fetch_key)
       elsif delete_key
         run_delete(delete_key)
-      elsif delete_path
-        run_delete_path(delete_path)
+      elsif delete_tree
+        run_delete_tree(delete_tree)
       else
         puts parser
       end
@@ -92,27 +114,27 @@ module SecretConfig
 
             For more information, see: https://rocketjob.github.io/secret_config/
 
-          secret_config [options]
+          secret-config [options]
         BANNER
 
-        opts.on "-e", "--export [FILE_NAME]", "Export configuration to a file or stdout if no file_name supplied. --path SOURCE_PATH is required." do |file_name|
-          @export = file_name || STDOUT
+        opts.on "-e", "--export SOURCE_PATH", "Export configuration. Use --file to specify the file name, otherwise stdout is used." do |path|
+          @export = path
         end
 
-        opts.on "-i", "--import [FILE_NAME]", "Import configuration from a file or stdin if no file_name supplied. --path TARGET_PATH is required." do |file_name|
-          @import = file_name || STDIN
+        opts.on "-i", "--import TARGET_PATH", "Import configuration. Use --file to specify the file name, --path for the SOURCE_PATH, otherwise stdin is used." do |path|
+          @import = path
         end
 
-        opts.on "--import-path SOURCE_PATH", "Import configuration from the configuration on another path. --path TARGET_PATH is required." do |path|
-          @import_path = path
+        opts.on "-f", "--file FILE_NAME", "Import/Export/Diff to/from this file." do |file_name|
+          @file_name = file_name
         end
 
-        opts.on "--diff [FILE_NAME]", "Compare configuration from a file or stdin if no file_name supplied. --path TARGET_PATH is required." do |file_name|
+        opts.on "-p", "--path FILE_NAME", "Import/Export/Diff to/from this path." do |file_name|
+          @path = path
+        end
+
+        opts.on "--diff TARGET_PATH", "Compare configuration to this path. Use --file to specify the source file name, --path for the SOURCE_PATH, otherwise stdin is used." do |file_name|
           @diff = file_name
-        end
-
-        opts.on "--diff-path SOURCE_PATH", "Diff configuration with the configuration on another path. --path TARGET_PATH is required." do |path|
-          @diff_path = path
         end
 
         opts.on "-s", "--set KEY=VALUE", "Set one key to value. Example: --set mysql/database=localhost" do |param|
@@ -122,63 +144,55 @@ module SecretConfig
           end
         end
 
-        opts.on "-f", "--fetch KEY", "Fetch the value for one setting. Example: --get mysql/database. " do |key|
+        opts.on "-f", "--fetch KEY", "Fetch the value for one setting. Example: --fetch mysql/database." do |key|
           @fetch_key = key
         end
 
-        opts.on "-d", "--delete KEY", "Delete one specific key. See --delete-path to delete all keys under a specific path " do |key|
+        opts.on "-d", "--delete KEY", "Delete one specific key." do |key|
           @delete_key = key
         end
 
-        opts.on "-r", "--delete-path PATH", "Recursively delete all keys under the specified path.. " do |path|
-          @delete_path = path
+        opts.on "-r", "--delete-tree PATH", "Recursively delete all keys under the specified path." do |path|
+          @delete_tree = path
         end
 
         opts.on "-c", "--console", "Start interactive console." do
           @console = true
         end
 
-        opts.on "-p", "--path PATH", "Path in central configuration to use." do |path|
-          @path = path
-        end
-
         opts.on "--provider PROVIDER", "Provider to use. [ssm | file]. Default: ssm" do |provider|
           @provider = provider.to_sym
         end
 
-        opts.on "--no-filter", "Do not filter passwords and keys." do
+        opts.on "--no-filter", "For --export only. Do not filter passwords and keys." do
           @no_filter = true
         end
 
-        opts.on "--prune", "During import delete all existing keys for which there is no key in the import file. Only applies to --import and --import-path." do
-          @prune = true
-        end
-
-        opts.on "--interpolate", "During export or copy, evaluate string interpolation and __import__" do
+        opts.on "--interpolate", "For --export only. Evaluate string interpolation and __import__." do
           @interpolate = true
         end
 
-        opts.on "--force", "During import overwrite all values, not just the changed ones. Useful for changing the KMS key. Only applies to --import and --import-path." do
+        opts.on "--prune", "For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import." do
+          @prune = true
+        end
+
+        opts.on "--force", "For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key." do
           @force = true
         end
 
-        opts.on "--key_id KEY_ID", "Encrypt config settings with this AWS KMS key id. Default: AWS Default key." do |key_id|
+        opts.on "--key_id KEY_ID", "For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key." do |key_id|
           @key_id = key_id
         end
 
-        opts.on "--key_alias KEY_ALIAS", "Encrypt config settings with this AWS KMS alias." do |key_alias|
+        opts.on "--key_alias KEY_ALIAS", "For --import only. Encrypt config settings with this AWS KMS alias." do |key_alias|
           @key_alias = key_alias
         end
 
-        opts.on "--region REGION", "AWS Region to use. Default: AWS_REGION env var." do |region|
-          @region = region
-        end
-
-        opts.on "--random_size INTEGER", Integer, "Size to use when generating random values. Whenever #{RANDOM} is encountered during an import. Default: 32" do |random_size|
+        opts.on "--random_size INTEGER", Integer, "For --import only. Size to use when generating random values when $(random) is encountered in the source. Default: 32" do |random_size|
           @random_size = random_size
         end
 
-        opts.on "-v", "--version", "Display Symmetric Encryption version." do
+        opts.on "-v", "--version", "Display Secret Config version." do
           @show_version = true
         end
 
@@ -203,57 +217,54 @@ module SecretConfig
         end
     end
 
-    def run_export(file_name, path, filtered: true)
-      raise(ArgumentError, "Missing required option --path") unless path
-
-      config = fetch_config(path, filtered: filtered)
+    def run_export(source_path, file_name, filtered: true)
+      config = fetch_config(source_path, filtered: filtered)
       write_config_file(file_name, config)
 
-      puts("Exported #{path} from #{provider} to #{file_name}") if file_name.is_a?(String)
+      puts("Exported #{source_path} from #{provider} to #{file_name}") if file_name.is_a?(String)
     end
 
-    def run_import(file_name, path, prune, force)
-      raise(ArgumentError, "Missing required option --path") unless path
-
+    def run_import(target_path, file_name, prune, force)
+      if file_name.is_a?(String)
+        puts "#{Colors::TITLE}--- #{target_path}"
+        puts "+++ #{file_name}#{Colors::CLEAR}"
+      end
       config = read_config_file(file_name)
-      import_config(config, path, prune, force)
-
-      puts("Imported #{file_name} to #{path} on provider: #{provider}") if file_name.is_a?(String)
+      import_config(config, target_path, prune, force)
     end
 
-    def run_import_path(source_path, path, prune, force)
-      raise(ArgumentError, "Missing required option --path") unless path
-
+    def run_import_path(target_path, source_path, prune, force)
       config = fetch_config(source_path, filtered: false)
-      import_config(config, path, prune, force)
+      import_config(config, target_path, prune, force)
 
-      puts("Imported #{source_path} to #{path} on provider: #{provider}")
+      puts("Imported #{target_path} from #{source_path} on provider: #{provider}")
     end
 
-    def run_diff(file_name, path)
-      raise(ArgumentError, "Missing required option --path") unless path
+    def run_diff(target_path, file_name)
+      source_config = read_config_file(file_name)
+      source        = Utils.flatten(source_config, target_path)
 
-      file_config = read_config_file(file_name)
-      file        = Utils.flatten(file_config, path)
+      target_config = fetch_config(target_path, filtered: false)
+      target        = Utils.flatten(target_config, target_path)
 
-      registry_config = fetch_config(path, filtered: false)
-      registry        = Utils.flatten(registry_config, path)
-
-      puts("Comparing #{file_name} to #{path} on provider: #{provider}") if file_name.is_a?(String)
-      diff_config(file, registry)
+      if file_name.is_a?(String)
+        puts "#{Colors::TITLE}--- #{target_path}"
+        puts "+++ #{file_name}#{Colors::CLEAR}"
+      end
+      diff_config(target, source)
     end
 
-    def run_diff_path(source_path, path)
-      raise(ArgumentError, "Missing required option --path") unless path
-
+    def run_diff_path(target_path, source_path)
       source_config = fetch_config(source_path, filtered: false)
       source        = Utils.flatten(source_config)
 
-      target_config = fetch_config(path, filtered: false)
+      target_config = fetch_config(target_path, filtered: false)
       target        = Utils.flatten(target_config)
 
-      puts("Comparing #{source_path} to #{path} on provider: #{provider}")
-      diff_config(source, target)
+      puts "#{Colors::TITLE}--- #{target_path}"
+      puts "+++ #{source_path}#{Colors::CLEAR}"
+
+      diff_config(target, source)
     end
 
     def run_console
@@ -261,16 +272,19 @@ module SecretConfig
     end
 
     def run_delete(key)
+      puts "#{Colors::TITLE}--- #{path}"
+      puts "#{Colors::REMOVE}- #{key}#{Colors::CLEAR}"
       provider_instance.delete(key)
     end
 
-    def run_delete_path(path)
+    def run_delete_tree(path)
       source_config = fetch_config(path)
-      ap source_config
-      source        = Utils.flatten(source_config, path)
+      puts "#{Colors::TITLE}--- #{path}#{Colors::CLEAR}"
+
+      source = Utils.flatten(source_config, path)
       source.each_key do |key|
-        puts("Deleting #{key}")
-          #provider_instance.delete(key)
+        puts "#{Colors::REMOVE}- #{key}#{Colors::CLEAR}"
+        provider_instance.delete(key)
       end
     end
 
@@ -283,8 +297,8 @@ module SecretConfig
       provider_instance.set(key, value)
     end
 
-    def current_values
-      @current_values ||= Utils.flatten(fetch_config(path, filtered: false), path)
+    def current_values(path)
+      Utils.flatten(fetch_config(path, filtered: false), path)
     end
 
     def read_config_file(file_name)
@@ -312,7 +326,8 @@ module SecretConfig
           # Ignore filtered values
           next
         end
-        puts "Setting: #{key}"
+        puts "#{Colors::KEY}+ #{key}#{Colors::CLEAR}\n\n"
+
         provider_instance.set(key, value)
       end
     end
@@ -324,26 +339,35 @@ module SecretConfig
     end
 
     # Diffs two configs and displays the results
-    def diff_config(source, target)
+    def diff_config(target, source)
       (source.keys + target.keys).sort.uniq.each do |key|
         if target.key?(key)
           if source.key?(key)
             value = source[key].to_s
             # Ignore filtered values
-            puts "* #{key}: #{target[key]} => #{source[key]}" if (value != target[key].to_s) && (value != FILTERED)
+            if (value != target[key].to_s) && (value != FILTERED)
+              puts "#{Colors::KEY}#{key}:"
+              puts "#{Colors::REMOVE}#{prefix_lines("- ", target[key])}"
+              puts "#{Colors::ADD}#{prefix_lines("+ ", source[key])}#{Colors::CLEAR}\n\n"
+            end
           else
-            puts "- #{key}"
+            puts "#{Colors::KEY}#{key}:"
+            puts "#{Colors::REMOVE}#{prefix_lines("- ", target[key])}\n\n"
           end
         elsif source.key?(key)
-          puts "+ #{key}: #{source[key]}"
+          puts "#{Colors::KEY}#{key}:"
+          puts "#{Colors::ADD}#{prefix_lines("+ ", source[key])}#{Colors::CLEAR}\n\n"
         end
       end
     end
 
-    def import_config(config, path, prune, force)
-      raise(ArgumentError, "Missing required option --path") unless path
+    def prefix_lines(prefix, value)
+      value.to_s.lines.collect { |line| "#{prefix}#{line}" }.join("")
+    end
 
-      delete_keys = prune ? current_values.keys - Utils.flatten(config, path).keys : []
+    def import_config(config, path, prune, force)
+      current     = current_values(path)
+      delete_keys = prune ? current.keys - Utils.flatten(config, path).keys : []
 
       unless delete_keys.empty?
         puts "Going to delete the following keys:"
@@ -351,10 +375,10 @@ module SecretConfig
         sleep(5)
       end
 
-      set_config(config, path, force ? {} : current_values)
+      set_config(config, path, force ? {} : current)
 
       delete_keys.each do |key|
-        puts "Deleting: #{key}"
+        puts "#{Colors::REMOVE}- #{key}"
         provider_instance.delete(key)
       end
     end
