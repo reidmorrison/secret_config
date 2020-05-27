@@ -9,7 +9,7 @@ require "irb"
 module SecretConfig
   class CLI
     attr_reader :path, :region, :provider,
-                :export, :no_filter,
+                :export, :no_filter, :interpolate,
                 :import, :key_id, :key_alias, :random_size, :prune, :force,
                 :diff_path, :import_path,
                 :fetch_key, :delete_key, :set_key, :set_value, :delete_path,
@@ -47,6 +47,7 @@ module SecretConfig
       @diff_path    = nil
       @import_path  = nil
       @force        = false
+      @interpolate  = false
 
       if argv.empty?
         puts parser
@@ -151,6 +152,10 @@ module SecretConfig
 
         opts.on "--prune", "During import delete all existing keys for which there is no key in the import file. Only applies to --import and --import-path." do
           @prune = true
+        end
+
+        opts.on "--interpolate", "During export or copy, evaluate string interpolation and __import__" do
+          @interpolate = true
         end
 
         opts.on "--force", "During import overwrite all values, not just the changed ones. Useful for changing the KMS key. Only applies to --import and --import-path." do
@@ -261,10 +266,11 @@ module SecretConfig
 
     def run_delete_path(path)
       source_config = fetch_config(path)
+      ap source_config
       source        = Utils.flatten(source_config, path)
       source.each_key do |key|
         puts("Deleting #{key}")
-        provider_instance.delete(key)
+          #provider_instance.delete(key)
       end
     end
 
@@ -312,7 +318,7 @@ module SecretConfig
     end
 
     def fetch_config(path, filtered: true)
-      registry = Registry.new(path: path, provider: provider_instance)
+      registry = Registry.new(path: path, provider: provider_instance, interpolate: interpolate)
       config   = filtered ? registry.configuration : registry.configuration(filters: nil)
       sort_hash_by_key!(config)
     end

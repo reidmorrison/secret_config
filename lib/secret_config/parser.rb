@@ -2,26 +2,26 @@ module SecretConfig
   class Parser
     attr_reader :tree, :path, :registry, :interpolator
 
-    def initialize(path, registry)
+    def initialize(path, registry, interpolate: true)
       @path         = path
       @registry     = registry
       @fetch_list   = {}
       @import_list  = {}
       @tree         = {}
-      @interpolator = SettingInterpolator.new
+      @interpolator = interpolate ? SettingInterpolator.new : nil
     end
 
     # Returns a flat path of keys and values from the provider without looking in the local path.
     # Keys are returned with path names relative to the supplied path.
     def parse(key, value)
       relative_key       = relative_key?(key) ? key : key.sub("#{path}/", "")
-      tree[relative_key] = value.is_a?(String) && value.include?("%{") ? interpolator.parse(value) : value
+      value              = interpolator.parse(value) if interpolator && value.is_a?(String) && value.include?("%{")
+      tree[relative_key] = value
     end
 
     # Returns a flat Hash of the rendered paths.
     def render
-      # apply_fetches
-      apply_imports
+      apply_imports if interpolator
       tree
     end
 
@@ -38,10 +38,11 @@ module SecretConfig
     # - Imports cannot reference other imports at this time.
     def apply_imports
       tree.keys.each do |key|
-        next unless key =~ /\/__import__\Z/
+        next unless (key =~ /\/__import__\Z/) || (key == "__import__")
 
         import_key = tree.delete(key)
         key, _     = ::File.split(key)
+        key        = nil if key == "."
 
         # binding.irb
 
@@ -53,13 +54,13 @@ module SecretConfig
             match = current_key.match(/\A#{import_key}\/(.*)/)
             next unless match
 
-            imported_key       = ::File.join(key, match[1])
+            imported_key       = key.nil? ? match[1] : ::File.join(key, match[1])
             tree[imported_key] = tree[current_key] unless tree.key?(imported_key)
           end
         else
           relative_paths = registry.send(:fetch_path, import_key)
           relative_paths.each_pair do |relative_key, value|
-            imported_key       = ::File.join(key, relative_key)
+            imported_key       = key.nil? ? relative_key : ::File.join(key, relative_key)
             tree[imported_key] = value unless tree.key?(imported_key)
           end
         end

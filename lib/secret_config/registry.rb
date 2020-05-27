@@ -4,18 +4,19 @@ require "concurrent-ruby"
 module SecretConfig
   # Centralized configuration with values stored in AWS System Manager Parameter Store
   class Registry
-    attr_reader :provider
+    attr_reader :provider, :interpolate
     attr_accessor :path
 
-    def initialize(path: nil, provider: nil, provider_args: nil)
+    def initialize(path: nil, provider: nil, provider_args: nil, interpolate: true)
       @path = default_path(path)
       raise(UndefinedRootError, "Root must start with /") unless @path.start_with?("/")
 
       resolved_provider = default_provider(provider)
       provider_args     = nil if resolved_provider != provider
 
-      @provider = create_provider(resolved_provider, provider_args)
-      @cache    = Concurrent::Map.new
+      @provider    = create_provider(resolved_provider, provider_args)
+      @cache       = Concurrent::Map.new
+      @interpolate = interpolate
       refresh!
     end
 
@@ -115,7 +116,8 @@ module SecretConfig
     # Returns a flat path of keys and values from the provider without looking in the local path.
     # Keys are returned with path names relative to the supplied path.
     def fetch_path(path)
-      parser = Parser.new(path, self)
+      puts "PATH: #{path}"
+      parser = Parser.new(path, self, interpolate: interpolate)
       provider.each(path) { |key, value| parser.parse(key, value) }
       parser.render
     end
