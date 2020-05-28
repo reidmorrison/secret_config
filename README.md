@@ -588,19 +588,25 @@ Secret Config has a command line interface for exporting, importing and copying 
 
 ~~~
 secret-config [options]
-    -e, --export [FILE_NAME]         Export configuration to a file or stdout if no file_name supplied.
-    -i, --import [FILE_NAME]         Import configuration from a file or stdin if no file_name supplied.
-    -C, --copy SOURCE_PATH           Import configuration from a file or stdin if no file_name supplied.
-    -D, --diff [FILE_NAME]           Compare configuration from a file or stdin if no file_name supplied.
+    -e, --export SOURCE_PATH         Export configuration. Use --file to specify the file name, otherwise stdout is used.
+    -i, --import TARGET_PATH         Import configuration. Use --file to specify the file name, --path for the SOURCE_PATH, otherwise stdin is used.
+        --file FILE_NAME             Import/Export/Diff to/from this file.
+    -p, --path PATH                  Import/Export/Diff to/from this path.
+        --diff TARGET_PATH           Compare configuration to this path. Use --file to specify the source file name, --path for the SOURCE_PATH, otherwise stdin is used.
+    -s, --set KEY=VALUE              Set one key to value. Example: --set mysql/database=localhost
+    -f, --fetch KEY                  Fetch the value for one setting. Example: --fetch mysql/database.
+    -d, --delete KEY                 Delete one specific key.
+    -r, --delete-tree PATH           Recursively delete all keys under the specified path.
     -c, --console                    Start interactive console.
-    -p, --path PATH                  Path to import from / export to.
-    -P, --provider PROVIDER          Provider to use. [ssm | file]. Default: ssm
-    -U, --no-filter                  Do not filter passwords and keys.
-    -d, --prune                      During import delete all existing keys for which there is no key in the import file.
-    -k, --key_id KEY_ID              AWS KMS Key id or Key Alias to use when importing configuration values. Default: AWS Default key.
-    -r, --region REGION              AWS Region to use. Default: AWS_REGION env var.
-    -R, --random_size INTEGER        Size to use when generating random values. Whenever $random is encountered during an import. Default: 32
-    -v, --version                    Display Symmetric Encryption version.
+        --provider PROVIDER          Provider to use. [ssm | file]. Default: ssm
+        --no-filter                  For --export only. Do not filter passwords and keys.
+        --interpolate                For --export only. Evaluate string interpolation and __import__.
+        --prune                      For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import.
+        --force                      For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key.
+        --key_id KEY_ID              For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key.
+        --key_alias KEY_ALIAS        For --import only. Encrypt config settings with this AWS KMS alias.
+        --random_size INTEGER        For --import only. Size to use when generating random values when $(random) is encountered in the source. Default: 32
+    -v, --version                    Display Secret Config version.
     -h, --help                       Prints this help.
 ~~~
 

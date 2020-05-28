@@ -129,7 +129,7 @@ module SecretConfig
           @file_name = file_name
         end
 
-        opts.on "-p", "--path FILE_NAME", "Import/Export/Diff to/from this path." do |file_name|
+        opts.on "-p", "--path PATH", "Import/Export/Diff to/from this path." do |path|
           @path = path
         end
 
@@ -218,22 +218,23 @@ module SecretConfig
     end
 
     def run_export(source_path, file_name, filtered: true)
+      puts("Exporting #{provider}:#{source_path} to #{file_name}") if file_name.is_a?(String)
+
       config = fetch_config(source_path, filtered: filtered)
       write_config_file(file_name, config)
-
-      puts("Exported #{source_path} from #{provider} to #{file_name}") if file_name.is_a?(String)
     end
 
     def run_import(target_path, file_name, prune, force)
-      if file_name.is_a?(String)
-        puts "#{Colors::TITLE}--- #{target_path}"
-        puts "+++ #{file_name}#{Colors::CLEAR}"
-      end
+      puts "#{Colors::TITLE}--- #{provider}:#{target_path}"
+      puts "+++ #{file_name}#{Colors::CLEAR}"
       config = read_config_file(file_name)
       import_config(config, target_path, prune, force)
     end
 
     def run_import_path(target_path, source_path, prune, force)
+      puts "#{Colors::TITLE}--- #{provider}:#{target_path}"
+      puts "+++ #{provider}:#{source_path}#{Colors::CLEAR}"
+
       config = fetch_config(source_path, filtered: false)
       import_config(config, target_path, prune, force)
 
@@ -248,7 +249,7 @@ module SecretConfig
       target        = Utils.flatten(target_config, target_path)
 
       if file_name.is_a?(String)
-        puts "#{Colors::TITLE}--- #{target_path}"
+        puts "#{Colors::TITLE}--- #{provider}:#{target_path}"
         puts "+++ #{file_name}#{Colors::CLEAR}"
       end
       diff_config(target, source)
@@ -261,8 +262,8 @@ module SecretConfig
       target_config = fetch_config(target_path, filtered: false)
       target        = Utils.flatten(target_config)
 
-      puts "#{Colors::TITLE}--- #{target_path}"
-      puts "+++ #{source_path}#{Colors::CLEAR}"
+      puts "#{Colors::TITLE}--- #{provider}:#{target_path}"
+      puts "+++ #{provider}:#{source_path}#{Colors::CLEAR}"
 
       diff_config(target, source)
     end
@@ -272,14 +273,14 @@ module SecretConfig
     end
 
     def run_delete(key)
-      puts "#{Colors::TITLE}--- #{path}"
+      puts "#{Colors::TITLE}--- #{provider}:#{path}"
       puts "#{Colors::REMOVE}- #{key}#{Colors::CLEAR}"
       provider_instance.delete(key)
     end
 
     def run_delete_tree(path)
       source_config = fetch_config(path)
-      puts "#{Colors::TITLE}--- #{path}#{Colors::CLEAR}"
+      puts "#{Colors::TITLE}--- #{provider}:#{path}#{Colors::CLEAR}"
 
       source = Utils.flatten(source_config, path)
       source.each_key do |key|
@@ -326,7 +327,12 @@ module SecretConfig
           # Ignore filtered values
           next
         end
-        puts "#{Colors::KEY}+ #{key}#{Colors::CLEAR}\n\n"
+
+        if current_values.key?(key)
+          puts "#{Colors::KEY}* #{key}#{Colors::CLEAR}"
+        else
+          puts "#{Colors::ADD}+ #{key}#{Colors::CLEAR}"
+        end
 
         provider_instance.set(key, value)
       end
@@ -378,7 +384,7 @@ module SecretConfig
       set_config(config, path, force ? {} : current)
 
       delete_keys.each do |key|
-        puts "#{Colors::REMOVE}- #{key}"
+        puts "#{Colors::REMOVE}- #{key}#{Colors::CLEAR}"
         provider_instance.delete(key)
       end
     end
