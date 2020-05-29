@@ -638,22 +638,22 @@ secrets:
 
 Import a yaml file, into a path in AWS SSM Parameter Store:
 
-    secret-config --import /production/my_application --path  production.yml
+    secret-config --import /production/my_application --file  production.yml
 
 Import a yaml file, into a path in AWS SSM Parameter Store, using a custom KMS key to encrypt the values:
 
-    secret-config --import /production/my_application --path production.yml --key_id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    secret-config --import /production/my_application --file production.yml --key_id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 Import a yaml file, into a path in AWS SSM Parameter Store, using a custom KMS key alias to encrypt the values:
 
-    secret-config --import /production/my_application --path production.yml --key_alias my_key_alias
+    secret-config --import /production/my_application --file production.yml --key_alias my_key_alias
 
 #### Diff
 
 Before importing a new config file into the AWS SSM Parameter store, a diff can be performed to determine
 what the differences are that will be applied when the import is run with the `--prune` option.
 
-    secret-config --diff /production/my_application --path production.yml 
+    secret-config --diff /production/my_application --file production.yml 
 
 Key:
 
