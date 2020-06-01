@@ -139,6 +139,11 @@ class RegistryTest < Minitest::Test
           value = registry.fetch("mysql/ports2", type: :integer, separator: ",")
           assert_equal([12345, 5343, 26815], value)
         end
+
+        it "accepts a default without requiring conversion" do
+          value = registry.fetch("mysql/ports5", type: :integer, separator: ",", default: [23, 45, 72])
+          assert_equal([23, 45, 72], value)
+        end
       end
 
       it "decodes Base 64" do

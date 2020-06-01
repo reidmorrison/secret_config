@@ -638,7 +638,7 @@ secrets:
 
 Import a yaml file, into a path in AWS SSM Parameter Store:
 
-    secret-config --import /production/my_application --file  production.yml
+    secret-config --import /production/my_application --file production.yml
 
 Import a yaml file, into a path in AWS SSM Parameter Store, using a custom KMS key to encrypt the values:
 
@@ -691,7 +691,7 @@ Import configuration from an existing path in AWS SSM Parameter Store into anoth
 #### Generating random passwords
 
 In the multi-tenant example above, we may want to generate a secure random password for each tenant.
-In the source file or registry, set the value to `$random`, this will ensure that during the `import` or `copy`
+In the source file or registry, set the value to `$random`, this will ensure that during the `import`
 that the destination will receive a secure random value.
 
 By default the length of the randomized value is 32 bytes, use `--random_size` to adjust the length of

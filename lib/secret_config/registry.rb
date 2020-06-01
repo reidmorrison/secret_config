@@ -62,11 +62,10 @@ module SecretConfig
 
       value = convert_encoding(encoding, value) if encoding
 
-      if separator
-        value.to_s.split(separator).collect { |element| convert_type(type, element.strip) }
-      else
-        convert_type(type, value)
-      end
+      return convert_type(type, value) unless separator
+      return value if value.is_a?(Array)
+
+      value.to_s.split(separator).collect { |element| convert_type(type, element.strip) }
     end
 
     # Set the value for a key in the centralized configuration store.
