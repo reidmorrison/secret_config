@@ -49,7 +49,7 @@ documentation would look like locally after any changes.
 2. Clone the repository to your local machine.
 3. Change into the documentation directory.
 
-       cd rocketjob/docs
+       cd secret_config/docs
        
 4. Install required gems
 
@@ -80,7 +80,7 @@ Since changes cannot be made directly to the Secret Config repository, fork it t
 2. Clone the repository to your local machine.
 3. Change into the Secret Config directory.
 
-       cd rocketjob
+       cd secret_config
        
 4. Install required gems
 
