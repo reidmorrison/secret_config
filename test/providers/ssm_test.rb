@@ -15,7 +15,7 @@ module Providers
         {
           "/test/my_application/mongo/database"               => "secret_config_test",
           "/test/my_application/mongo/primary"                => "127.0.0.1:27017",
-          "/test/my_application/mongo/secondary"              => "%{hostname}:27018",
+          "/test/my_application/mongo/secondary"              => "${hostname}:27018",
           "/test/my_application/mysql/database"               => "secret_config_test",
           "/test/my_application/mysql/password"               => "secret_configrules",
           "/test/my_application/mysql/username"               => "secret_config",

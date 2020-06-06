@@ -26,7 +26,7 @@ class ParserTest < Minitest::Test
     #
     # Retrieve values elsewhere in the registry.
     # Paths can be relative to the current root, or absolute paths outside the current root.
-    #   %{fetch:key}      # Fetches a single value from a relative or absolute path
+    #   ${fetch:key}      # Fetches a single value from a relative or absolute path
     # Return the value of the supplied key.
     #
     # With a relative key, look for the value in the current registry.
@@ -47,7 +47,7 @@ class ParserTest < Minitest::Test
     #   end
     # end
 
-    #   %{import:path}    # Imports a path of keys and values into the current path
+    #   ${import:path}    # Imports a path of keys and values into the current path
     # Replace the current value with a tree of values with the supplied path.
     #
     describe "#import" do

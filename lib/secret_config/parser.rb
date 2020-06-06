@@ -15,7 +15,7 @@ module SecretConfig
     # Keys are returned with path names relative to the supplied path.
     def parse(key, value)
       relative_key       = relative_key?(key) ? key : key.sub("#{path}/", "")
-      value              = interpolator.parse(value) if interpolator && value.is_a?(String) && value.include?("%{")
+      value              = interpolator.parse(value) if interpolator && value.is_a?(String) && value.include?("${")
       tree[relative_key] = value
     end
 

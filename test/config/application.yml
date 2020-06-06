@@ -45,7 +45,7 @@ test:
     mongo:
       database:   secret_config_test
       primary:    127.0.0.1:27017
-      secondary:  "%{hostname}:27018"
+      secondary:  "${hostname}:27018"
 
     secrets:
       secret_key_base: somereallylongteststring
@@ -59,15 +59,15 @@ test:
         key:     key0
 
     mysql:
-#      database:   "%{fetch: /test/my_application/mysql/database }"
+#      database:   "${fetch: /test/my_application/mysql/database }"
       username:   other
       password:   otherrules
-      host:       "%{hostname}"
+      host:       "${hostname}"
 
     mongo:
       database:   secret_config_test
       primary:    localhost:27017
-      secondary:  "%{hostname}:27018"
+      secondary:  "${hostname}:27018"
 
     mongo2:
       __import__: mongo
