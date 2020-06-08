@@ -104,7 +104,7 @@ production:
   host:     production.server
 ~~~
 
-Replace the sensitive data with a `SecureConfig.fetch`:
+Replace the sensitive data with a call to `SecretConfig.fetch`:
 
 Updated `database.yml`:
 
