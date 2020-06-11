@@ -210,7 +210,13 @@ module SecretConfig
         begin
           case provider
           when :ssm
-            Providers::Ssm.new(key_id: key_id, key_alias: key_alias)
+            if key_alias
+              Providers::Ssm.new(key_alias: key_alias)
+            elsif key_id
+              Providers::Ssm.new(key_id: key_id)
+            else
+              Providers::Ssm.new
+            end
           else
             raise ArgumentError, "Invalid provider: #{provider}"
           end
