@@ -7,7 +7,7 @@ module SecretConfig
         if key == NODE_KEY
           yield(path, value)
         else
-          name = path.nil? ? key : "#{path}/#{key}"
+          name = path.nil? ? key : File.join(path, key)
           value.is_a?(Hash) ? flatten_each(value, name, &block) : yield(name, value)
         end
       end
