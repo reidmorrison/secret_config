@@ -5,11 +5,9 @@ Centralized Configuration and Secrets Management for Ruby and Rails applications
 
 Securely store configuration information centrally, supporting multiple tenants of the same application.
 
-Checkout https://config.rocketjob.io/
-
 ## Documentation
 
-* [Guide](https://config.rocketjob.io/)
+* [Secret Config](https://config.rocketjob.io/)
 
 ## Support
 
