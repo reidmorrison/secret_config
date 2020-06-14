@@ -25,7 +25,7 @@ module SecretConfig
       # Returns the value or `nil` if not found
       def fetch(key)
         values = fetch_path(path)
-        value.is_a?(Hash) ? nil : value
+        values.is_a?(Hash) ? nil : values
       end
 
       private
