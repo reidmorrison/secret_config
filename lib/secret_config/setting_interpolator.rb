@@ -24,8 +24,12 @@ module SecretConfig
       Time.now.strftime(format)
     end
 
-    def env(name)
-      ENV[name]
+    def env(name, default: :no_default_supplied)
+      return ENV[name] if ENV.key?(name)
+
+      return default unless default == :no_default_supplied
+
+      raise(MissingEnvironmentVariable, "Missing mandatory environment variable: #{name}")
     end
 
     def hostname(format = nil)

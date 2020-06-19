@@ -38,11 +38,11 @@ module SecretConfig
     # - Imports cannot reference other imports at this time.
     def apply_imports
       tree.keys.each do |key|
-        next unless (key =~ /\/__import__\Z/) || (key == "__import__")
+        next unless (key =~ %r{/__import__\Z}) || (key == "__import__")
 
         import_key = tree.delete(key)
-        key, _     = ::File.split(key)
-        key        = nil if key == "."
+        key, = ::File.split(key)
+        key = nil if key == "."
 
         # binding.irb
 
@@ -51,7 +51,7 @@ module SecretConfig
 
         if relative_key?(import_key)
           tree.keys.each do |current_key|
-            match = current_key.match(/\A#{import_key}\/(.*)/)
+            match = current_key.match(%r{\A#{import_key}/(.*)})
             next unless match
 
             imported_key       = key.nil? ? match[1] : ::File.join(key, match[1])
@@ -71,6 +71,5 @@ module SecretConfig
     def relative_key?(key)
       !key.start_with?("/")
     end
-
   end
 end

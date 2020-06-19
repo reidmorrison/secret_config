@@ -5,6 +5,9 @@ module SecretConfig
   class MissingMandatoryKey < Error
   end
 
+  class MissingEnvironmentVariable < Error
+  end
+
   class UndefinedRootError < Error
   end
 

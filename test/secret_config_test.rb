@@ -96,6 +96,5 @@ class SecretConfigTest < Minitest::Test
         assert_equal true, database
       end
     end
-
   end
 end

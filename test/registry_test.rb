@@ -132,12 +132,12 @@ class RegistryTest < Minitest::Test
 
         it "of integers" do
           value = registry.fetch("mysql/ports", type: :integer, separator: ",")
-          assert_equal([12345, 5343, 26815], value)
+          assert_equal([12_345, 5343, 26_815], value)
         end
 
         it "of integers with spaces" do
           value = registry.fetch("mysql/ports2", type: :integer, separator: ",")
-          assert_equal([12345, 5343, 26815], value)
+          assert_equal([12_345, 5343, 26_815], value)
         end
 
         it "accepts a default without requiring conversion" do

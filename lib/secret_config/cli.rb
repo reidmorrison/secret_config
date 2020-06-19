@@ -359,16 +359,16 @@ module SecretConfig
             # Ignore filtered values
             if (value != target[key].to_s) && (value != FILTERED)
               puts "#{Colors::KEY}#{key}:"
-              puts "#{Colors::REMOVE}#{prefix_lines("- ", target[key])}"
-              puts "#{Colors::ADD}#{prefix_lines("+ ", source[key])}#{Colors::CLEAR}\n\n"
+              puts "#{Colors::REMOVE}#{prefix_lines('- ', target[key])}"
+              puts "#{Colors::ADD}#{prefix_lines('+ ', source[key])}#{Colors::CLEAR}\n\n"
             end
           else
             puts "#{Colors::KEY}#{key}:"
-            puts "#{Colors::REMOVE}#{prefix_lines("- ", target[key])}\n\n"
+            puts "#{Colors::REMOVE}#{prefix_lines('- ', target[key])}\n\n"
           end
         elsif source.key?(key)
           puts "#{Colors::KEY}#{key}:"
-          puts "#{Colors::ADD}#{prefix_lines("+ ", source[key])}#{Colors::CLEAR}\n\n"
+          puts "#{Colors::ADD}#{prefix_lines('+ ', source[key])}#{Colors::CLEAR}\n\n"
         end
       end
     end
