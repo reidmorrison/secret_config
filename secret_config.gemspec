@@ -10,8 +10,7 @@ Gem::Specification.new do |s|
   s.version               = SecretConfig::VERSION
   s.platform              = Gem::Platform::RUBY
   s.authors               = ["Reid Morrison"]
-  s.email                 = ["reidmo@gmail.com"]
-  s.homepage              = "https://github.com/rocketjob/secret_config"
+  s.homepage              = "https://config.rocketjob.io"
   s.summary               = "Centralized Configuration and Secrets Management for Ruby and Rails applications."
   s.files                 = Dir["lib/**/*", "bin/*", "LICENSE", "Rakefile", "README.md"]
   s.test_files            = Dir["test/**/*"]
