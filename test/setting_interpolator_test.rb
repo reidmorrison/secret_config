@@ -101,8 +101,15 @@ module SecretConfig
 
         it "handles missing ENV var" do
           string = "${env:OTHER_TEST_SETTING}"
+          assert_raises SecretConfig::MissingEnvironmentVariable do
+            interpolator.parse(string)
+          end
+        end
+
+        it "uses default value for missing ENV var" do
+          string = "${env:OTHER_TEST_SETTING,My default value}"
           actual = interpolator.parse(string)
-          assert_equal "", actual, string
+          assert_equal "My default value", actual, string
         end
       end
 

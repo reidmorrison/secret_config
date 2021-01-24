@@ -24,7 +24,7 @@ module SecretConfig
       Time.now.strftime(format)
     end
 
-    def env(name, default: :no_default_supplied)
+    def env(name, default = :no_default_supplied)
       return ENV[name] if ENV.key?(name)
 
       return default unless default == :no_default_supplied
