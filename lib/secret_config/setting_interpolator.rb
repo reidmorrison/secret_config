@@ -4,16 +4,19 @@ require "securerandom"
 # * SecretConfig Interpolations
 #
 # Expanding values inline for date, time, hostname, pid and random values.
-#   ${date}           # Current date in the format of "%Y%m%d" (CCYYMMDD)
-#   ${date:format}    # Current date in the supplied format. See strftime
-#   ${time}           # Current date and time down to ms in the format of "%Y%m%d%Y%H%M%S%L" (CCYYMMDDHHMMSSmmm)
-#   ${time:format}    # Current date and time in the supplied format. See strftime
-#   ${env:name}       # Extract value from the named environment value.
-#   ${hostname}       # Full name of this host.
-#   ${hostname:short} # Short name of this host. Everything up to the first period.
-#   ${pid}            # Process Id for this process.
-#   ${random}         # URL safe Random 32 byte value.
-#   ${random:size}    # URL safe Random value of `size` bytes.
+#   ${date}             # Current date in the format of "%Y%m%d" (CCYYMMDD)
+#   ${date:format}      # Current date in the supplied format. See strftime
+#   ${time}             # Current date and time down to ms in the format of "%Y%m%d%Y%H%M%S%L" (CCYYMMDDHHMMSSmmm)
+#   ${time:format}      # Current date and time in the supplied format. See strftime
+#   ${env:name}         # Extract value from the named environment value.
+#                       #   Raises SecretConfig::MissingEnvironmentVariable when the env var is not defined.
+#   ${env:name,default} # Extract value from the named environment value.
+#                       #   Returns the supplied default value when the env var is not defined.
+#   ${hostname}         # Full name of this host.
+#   ${hostname:short}   # Short name of this host. Everything up to the first period.
+#   ${pid}              # Process Id for this process.
+#   ${random}           # URL safe Random 32 byte value.
+#   ${random:size}      # URL safe Random value of `size` bytes.
 module SecretConfig
   class SettingInterpolator < StringInterpolator
     def date(format = "%Y%m%d")

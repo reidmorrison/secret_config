@@ -27,6 +27,10 @@ Available interpolations:
     * Current date and time in the supplied format. See strftime
 * ${env:name}
     * Extract value from the named environment variable.
+    * Raises `SecretConfig::MissingEnvironmentVariable` when the environment variable is not defined.
+* ${env:name,default}
+    * Extract value from the named environment variable.
+    * Returns the supplied default value when the environment variable is not defined.
 * ${hostname}
     * Full name of this host.
 * ${hostname:short}
