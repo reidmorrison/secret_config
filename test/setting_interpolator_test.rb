@@ -154,6 +154,28 @@ module SecretConfig
           end
         end
       end
+
+      describe "#select" do
+        it "randomly selects one of the supplied values" do
+          string = "${select:one, two,three}"
+          actual = interpolator.parse(string)
+          assert %w[one two three].include?(actual), actual
+        end
+
+        it "fails when less than 2 options are supplied" do
+          string = "${select:one}"
+          assert_raises ConfigurationError do
+            interpolator.parse(string)
+          end
+        end
+
+        it "fails when no options are supplied" do
+          string = "${select}"
+          assert_raises ConfigurationError do
+            interpolator.parse(string)
+          end
+        end
+      end
     end
   end
 end

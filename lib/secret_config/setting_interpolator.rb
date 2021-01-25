@@ -17,6 +17,9 @@ require "securerandom"
 #   ${pid}              # Process Id for this process.
 #   ${random}           # URL safe Random 32 byte value.
 #   ${random:size}      # URL safe Random value of `size` bytes.
+#   ${select:a,b,c,d}   # Randomly select one of the supplied values. A new new value is selected on restart or refresh.
+#                       # Values are separated by `,` and cannot include `,` in their values.
+#                       # Values are stripped of leading and trailing spaces.
 module SecretConfig
   class SettingInterpolator < StringInterpolator
     def date(format = "%Y%m%d")
@@ -47,6 +50,15 @@ module SecretConfig
 
     def random(size = 32)
       SecureRandom.urlsafe_base64(size)
+    end
+
+    # Empty values return nil which removes the key entirely from the config
+    def select(*values)
+      if values.size < 2
+        raise(ConfigurationError, "Must supply at least 2 options when using select: #{values.inspect}")
+      end
+
+      values[SecureRandom.random_number(values.count)]
     end
   end
 end

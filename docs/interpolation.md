@@ -31,6 +31,8 @@ Available interpolations:
 * ${env:name,default}
     * Extract value from the named environment variable.
     * Returns the supplied default value when the environment variable is not defined.
+    * Default values is stripped of leading and trailing spaces.
+    * Default value must not include include `,`.
 * ${hostname}
     * Full name of this host.
 * ${hostname:short}
@@ -41,6 +43,10 @@ Available interpolations:
     * URL safe Random 32 byte value.
 * ${random:size}
     * URL safe Random value of `size` bytes.
+* ${select:a,b,c,d}
+    * Randomly select one of the supplied values. A new new value is selected on restart or refresh.
+    * Values are separated by `,` and cannot include `,` in their values.
+    * Values are stripped of leading and trailing spaces. 
 
 #### Notes:
 
