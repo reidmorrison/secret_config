@@ -98,7 +98,7 @@ module SecretConfig
       end
 
       # Remove keys deleted from the central registry.
-      (existing_keys - updated_keys).each { |key| provider.delete(key) }
+      (existing_keys - updated_keys).each { |key| cache.delete(key) }
 
       true
     end
