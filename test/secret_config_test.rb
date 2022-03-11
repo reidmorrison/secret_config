@@ -47,6 +47,14 @@ class SecretConfigTest < Minitest::Test
         assert_equal "secret_config_test", SecretConfig.fetch("mysql/database")
       end
 
+      it "fetches with default" do
+        assert_equal "default", SecretConfig.fetch("mysql/unknown", default: "default")
+      end
+
+      it "fetches with default of nil" do
+        assert_nil SecretConfig.fetch("mysql/unknown", default: nil)
+      end
+
       it "can be overridden by an environment variable" do
         ENV["MYSQL_DATABASE"] = "other"
 

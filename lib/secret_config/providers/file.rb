@@ -31,10 +31,16 @@ module SecretConfig
       private
 
       def fetch_path(path)
-        config = YAML.load(ERB.new(::File.new(file_name).read).result)
+        config = load_yaml(ERB.new(::File.new(file_name).read).result)
 
         paths = path.sub(%r{\A/*}, "").sub(%r{/*\Z}, "").split("/")
         config.dig(*paths)
+      end
+
+      def load_yaml(src)
+        return YAML.safe_load(src, permitted_classes: [Symbol], aliases: true) if Psych::VERSION > "4.0"
+
+        YAML.load(src)
       end
     end
   end

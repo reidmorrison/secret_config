@@ -154,7 +154,7 @@ module SecretConfig
     def convert_type(type, value)
       case type
       when :string
-        value.to_s
+        value.nil? ? nil : value.to_s
       when :integer
         value.to_i
       when :float
