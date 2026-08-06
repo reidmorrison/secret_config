@@ -1,5 +1,5 @@
 # Secret Config
-[![Gem Version](https://img.shields.io/gem/v/secret_config.svg)](https://rubygems.org/gems/secret_config) [![Build Status](https://github.com/rocketjob/secret_config/workflows/build/badge.svg)](https://github.com/rocketjob/secret_config/actions?query=workflow%3Abuild) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg) [![Gitter chat](https://img.shields.io/badge/IRC%20(gitter)-Support-brightgreen.svg)](https://gitter.im/rocketjob/support)
+[![Gem Version](https://img.shields.io/gem/v/secret_config.svg)](https://rubygems.org/gems/secret_config) [![Build Status](https://github.com/reidmorrison/secret_config/workflows/build/badge.svg)](https://github.com/reidmorrison/secret_config/actions?query=workflow%3Abuild) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg)
 
 Centralized Configuration and Secrets Management for Ruby and Rails applications.
 
@@ -7,12 +7,7 @@ Securely store configuration information centrally, supporting multiple tenants 
 
 ## Documentation
 
-* [Secret Config](https://config.rocketjob.io/)
-
-## Support
-
-* Questions? Join the chat room on Gitter for [rocketjob support](https://gitter.im/rocketjob/support)
-* [Report bugs](https://github.com/rocketjob/secret_config/issues)
+* [Secret Config](https://config.reidmorrison.com/)
 
 ## v0.10 Upgrade Notes
 
