@@ -1,5 +1,5 @@
 lib = File.expand_path("lib", __dir__)
-$:.unshift lib unless $:.include?(lib)
+$LOAD_PATH.unshift lib unless $LOAD_PATH.include?(lib)
 
 # Maintain your gem's version:
 require "secret_config/version"
@@ -12,11 +12,20 @@ Gem::Specification.new do |s|
   s.authors               = ["Reid Morrison"]
   s.homepage              = "https://config.reidmorrison.com"
   s.summary               = "Centralized Configuration and Secrets Management for Ruby and Rails applications."
+  s.description           = "Secret Config stores configuration settings and secrets centrally, " \
+                            "supporting multiple tenants of the same application. Settings are read " \
+                            "from AWS System Manager Parameter Store, or a local file during " \
+                            "development and test, and can be overridden with environment variables."
   s.files                 = Dir["lib/**/*", "bin/*", "LICENSE", "Rakefile", "README.md"]
-  s.test_files            = Dir["test/**/*"]
   s.license               = "Apache-2.0"
-  s.required_ruby_version = ">= 2.3"
+  s.required_ruby_version = ">= 3.2"
   s.bindir                = "bin"
   s.executables           = ["secret-config"]
-  s.add_dependency "concurrent-ruby"
+  s.add_dependency "concurrent-ruby", "~> 1.0"
+  s.metadata = {
+    "bug_tracker_uri"       => "https://github.com/reidmorrison/secret_config/issues",
+    "documentation_uri"     => "https://config.reidmorrison.com",
+    "source_code_uri"       => "https://github.com/reidmorrison/secret_config/tree/v#{SecretConfig::VERSION}",
+    "rubygems_mfa_required" => "true"
+  }
 end

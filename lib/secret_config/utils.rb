@@ -28,13 +28,13 @@ module SecretConfig
       h
     end
 
-    def self.decompose(key, value, h = {})
+    def self.decompose(key, value, hash = {})
       full_path, name = File.split(key)
       if full_path == "."
-        h[key] = value
-        return h
+        hash[key] = value
+        return hash
       end
-      last = full_path.split("/").reduce(h) do |target, path|
+      last = full_path.split("/").reduce(hash) do |target, path|
         if path == ""
           target
         elsif target.key?(path)
@@ -46,7 +46,7 @@ module SecretConfig
         end
       end
       last[name] = value
-      h
+      hash
     end
 
     def self.constantize_symbol(symbol, namespace = "SecretConfig::Providers")

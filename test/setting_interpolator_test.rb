@@ -9,6 +9,7 @@ module SecretConfig
           string   = "Set a date of ${date} here."
           expected = string.gsub("${date}", Date.today.strftime("%Y%m%d"))
           actual   = interpolator.parse(string)
+
           assert_equal expected, actual, string
         end
 
@@ -18,6 +19,7 @@ module SecretConfig
           expected = expected.gsub("${time:%H%M}", Time.now.strftime("%H%M"))
           expected = expected.gsub("${pid}", $$.to_s)
           actual   = interpolator.parse(string)
+
           assert_equal expected, actual, string
         end
 
@@ -34,6 +36,7 @@ module SecretConfig
           string   = "${date}"
           expected = Date.today.strftime("%Y%m%d")
           actual   = interpolator.parse(string)
+
           assert_equal expected, actual, string
         end
 
@@ -41,6 +44,7 @@ module SecretConfig
           string   = "Set a date of ${date} here."
           expected = string.gsub("${date}", Date.today.strftime("%Y%m%d"))
           actual   = interpolator.parse(string)
+
           assert_equal expected, actual, string
         end
 
@@ -48,6 +52,7 @@ module SecretConfig
           string   = "Set a custom ${date:%m%d%Y} here."
           expected = string.gsub("${date:%m%d%Y}", Date.today.strftime("%m%d%Y"))
           actual   = interpolator.parse(string)
+
           assert_equal expected, actual, string
         end
       end
@@ -59,6 +64,7 @@ module SecretConfig
           Time.stub(:now, time) do
             expected = Time.now.strftime("%Y%m%d%H%M%S%L")
             actual   = interpolator.parse(string)
+
             assert_equal expected, actual, string
           end
         end
@@ -69,6 +75,7 @@ module SecretConfig
           Time.stub(:now, time) do
             expected = string.gsub("${time}", Time.now.strftime("%Y%m%d%H%M%S%L"))
             actual   = interpolator.parse(string)
+
             assert_equal expected, actual, string
           end
         end
@@ -77,6 +84,7 @@ module SecretConfig
           string   = "Set a custom time of ${time:%H%M} here."
           expected = string.gsub("${time:%H%M}", Time.now.strftime("%H%M"))
           actual   = interpolator.parse(string)
+
           assert_equal expected, actual, string
         end
       end
@@ -89,6 +97,7 @@ module SecretConfig
         it "fetches existing ENV var" do
           string = "${env:TEST_SETTING}"
           actual = interpolator.parse(string)
+
           assert_equal "Secret", actual, string
         end
 
@@ -96,6 +105,7 @@ module SecretConfig
           string   = "Hello ${env:TEST_SETTING}. How are you?"
           actual   = interpolator.parse(string)
           expected = string.gsub("${env:TEST_SETTING}", "Secret")
+
           assert_equal expected, actual, string
         end
 
@@ -109,6 +119,7 @@ module SecretConfig
         it "uses default value for missing ENV var" do
           string = "${env:OTHER_TEST_SETTING,My default value}"
           actual = interpolator.parse(string)
+
           assert_equal "My default value", actual, string
         end
       end
@@ -117,12 +128,14 @@ module SecretConfig
         it "returns hostname" do
           string = "${hostname}"
           actual = interpolator.parse(string)
+
           assert_equal Socket.gethostname, actual, string
         end
 
         it "returns short hostname" do
           string = "${hostname:short}"
           actual = interpolator.parse(string)
+
           assert_equal Socket.gethostname.split(".")[0], actual, string
         end
       end
@@ -131,6 +144,7 @@ module SecretConfig
         it "returns process id" do
           string = "${pid}"
           actual = interpolator.parse(string)
+
           assert_equal $$.to_s, actual, string
         end
       end
@@ -141,6 +155,7 @@ module SecretConfig
           random = SecureRandom.urlsafe_base64(32)
           SecureRandom.stub(:urlsafe_base64, random) do
             actual = interpolator.parse(string)
+
             assert_equal random, actual, string
           end
         end
@@ -150,6 +165,7 @@ module SecretConfig
           random = SecureRandom.urlsafe_base64(64)
           SecureRandom.stub(:urlsafe_base64, random) do
             actual = interpolator.parse(string)
+
             assert_equal random, actual, string
           end
         end
@@ -159,7 +175,8 @@ module SecretConfig
         it "randomly selects one of the supplied values" do
           string = "${select:one, two,three}"
           actual = interpolator.parse(string)
-          assert %w[one two three].include?(actual), actual
+
+          assert_includes %w[one two three], actual, actual
         end
 
         it "fails when less than 2 options are supplied" do

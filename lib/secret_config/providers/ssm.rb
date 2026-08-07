@@ -11,12 +11,13 @@ module SecretConfig
       attr_reader :client, :key_id, :retry_count, :retry_max_ms, :logger
 
       def initialize(
-        key_id: ENV["SECRET_CONFIG_KEY_ID"],
-        key_alias: ENV["SECRET_CONFIG_KEY_ALIAS"],
+        key_id: ENV.fetch("SECRET_CONFIG_KEY_ID", nil),
+        key_alias: ENV.fetch("SECRET_CONFIG_KEY_ALIAS", nil),
         retry_count: 25,
         retry_max_ms: 10_000,
         **args
       )
+        super()
         @key_id       =
           if key_alias
             key_alias =~ %r{^alias/} ? key_alias : "alias/#{key_alias}"
@@ -49,7 +50,8 @@ module SecretConfig
             retries += 1
             if retry_count > retries
               sleep_seconds = rand(retry_max_ms) / 1000.0
-              logger&.info("SSM Parameter Store GetParametersByPath API Requests throttle exceeded, retry: #{retries}, sleeping #{sleep_seconds} seconds.")
+              logger&.info("SSM Parameter Store GetParametersByPath API Requests throttle exceeded, " \
+                           "retry: #{retries}, sleeping #{sleep_seconds} seconds.")
               sleep(sleep_seconds)
               retry
             end
@@ -79,12 +81,14 @@ module SecretConfig
       def delete(key)
         client.delete_parameter(name: key)
       rescue Aws::SSM::Errors::ParameterNotFound
+        # Deleting a key that is already absent is not an error.
       end
 
       # Returns the value or `nil` if not found
       def fetch(key)
         client.get_parameter(name: key, with_decryption: true).parameter.value
       rescue Aws::SSM::Errors::ParameterNotFound
+        # A missing key returns nil rather than raising.
       end
     end
   end

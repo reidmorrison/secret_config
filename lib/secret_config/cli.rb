@@ -4,7 +4,7 @@ require "erb"
 require "yaml"
 require "json"
 require "securerandom"
-require "irb"
+# require "irb"
 
 module SecretConfig
   class CLI
@@ -81,18 +81,18 @@ module SecretConfig
       elsif export
         raise(ArgumentError, "--path option is not valid for --export") if path
 
-        run_export(export, file_name || STDOUT, filtered: !no_filter)
+        run_export(export, file_name || $stdout, filtered: !no_filter)
       elsif import
         if path
           run_import_path(import, path, prune, force)
         else
-          run_import(import, file_name || STDIN, prune, force)
+          run_import(import, file_name || $stdin, prune, force)
         end
       elsif diff
         if path
           run_diff_path(diff, path)
         else
-          run_diff(diff, file_name || STDIN)
+          run_diff(diff, file_name || $stdin)
         end
       elsif set_key
         run_set(set_key, set_value)
@@ -117,11 +117,14 @@ module SecretConfig
           secret-config [options]
         BANNER
 
-        opts.on "-e", "--export SOURCE_PATH", "Export configuration. Use --file to specify the file name, otherwise stdout is used." do |path|
+        opts.on "-e", "--export SOURCE_PATH",
+                "Export configuration. Use --file to specify the file name, otherwise stdout is used." do |path|
           @export = path
         end
 
-        opts.on "-i", "--import TARGET_PATH", "Import configuration. Use --file to specify the file name, --path for the SOURCE_PATH, otherwise stdin is used." do |path|
+        opts.on "-i", "--import TARGET_PATH",
+                "Import configuration. Use --file to specify the file name, --path for the SOURCE_PATH, " \
+                "otherwise stdin is used." do |path|
           @import = path
         end
 
@@ -133,7 +136,9 @@ module SecretConfig
           @path = path
         end
 
-        opts.on "--diff TARGET_PATH", "Compare configuration to this path. Use --file to specify the source file name, --path for the SOURCE_PATH, otherwise stdin is used." do |file_name|
+        opts.on "--diff TARGET_PATH",
+                "Compare configuration to this path. Use --file to specify the source file name, " \
+                "--path for the SOURCE_PATH, otherwise stdin is used." do |file_name|
           @diff = file_name
         end
 
@@ -172,15 +177,19 @@ module SecretConfig
           @interpolate = true
         end
 
-        opts.on "--prune", "For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import." do
+        opts.on "--prune",
+                "For --import only. During import delete all existing keys for which there is no key " \
+                "in the import file. Only works with --import." do
           @prune = true
         end
 
-        opts.on "--force", "For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key." do
+        opts.on "--force",
+                "For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key." do
           @force = true
         end
 
-        opts.on "--key_id KEY_ID", "For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key." do |key_id|
+        opts.on "--key_id KEY_ID",
+                "For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key." do |key_id|
           @key_id = key_id
         end
 
@@ -188,7 +197,9 @@ module SecretConfig
           @key_alias = key_alias
         end
 
-        opts.on "--random_size INTEGER", Integer, "For --import only. Size to use when generating random values when $(random) is encountered in the source. Default: 32" do |random_size|
+        opts.on "--random_size INTEGER", Integer,
+                "For --import only. Size to use when generating random values when $(random) is " \
+                "encountered in the source. Default: 32" do |random_size|
           @random_size = random_size
         end
 
@@ -207,19 +218,17 @@ module SecretConfig
 
     def provider_instance
       @provider_instance ||=
-        begin
-          case provider
-          when :ssm
-            if key_alias
-              Providers::Ssm.new(key_alias: key_alias)
-            elsif key_id
-              Providers::Ssm.new(key_id: key_id)
-            else
-              Providers::Ssm.new
-            end
+        case provider
+        when :ssm
+          if key_alias
+            Providers::Ssm.new(key_alias: key_alias)
+          elsif key_id
+            Providers::Ssm.new(key_id: key_id)
           else
-            raise ArgumentError, "Invalid provider: #{provider}"
+            Providers::Ssm.new
           end
+        else
+          raise ArgumentError, "Invalid provider: #{provider}"
         end
     end
 
@@ -374,7 +383,7 @@ module SecretConfig
     end
 
     def prefix_lines(prefix, value)
-      value.to_s.lines.collect { |line| "#{prefix}#{line}" }.join("")
+      value.to_s.lines.collect { |line| "#{prefix}#{line}" }.join
     end
 
     def import_config(config, path, prune, force)
@@ -405,9 +414,9 @@ module SecretConfig
       return file_name_or_io.write(data) unless file_name_or_io.is_a?(String)
 
       output_path = ::File.dirname(file_name_or_io)
-      FileUtils.mkdir_p(output_path) unless ::File.exist?(output_path)
+      FileUtils.mkdir_p(output_path)
 
-      ::File.open(file_name_or_io, "w") { |io| io.write(data) }
+      ::File.write(file_name_or_io, data)
     end
 
     def render(hash, format)
@@ -451,12 +460,12 @@ module SecretConfig
       SecureRandom.urlsafe_base64(random_size)
     end
 
-    def sort_hash_by_key!(h)
-      h.keys.sort.each do |key|
-        value = h[key] = h.delete(key)
+    def sort_hash_by_key!(hash)
+      hash.keys.sort.each do |key|
+        value = hash[key] = hash.delete(key)
         sort_hash_by_key!(value) if value.is_a?(Hash)
       end
-      h
+      hash
     end
   end
 end

@@ -1,0 +1,30 @@
+---
+include:
+- Rakefile
+- Gemfile
+- "*.gemspec"
+- bin/*
+- lib/**/*.rb
+- test/**/*.rb
+exclude:
+- docs/**/*
+- vendor/**/*
+- coverage/**/*
+- ".bundle/**/*"
+require: []
+domains: []
+reporters:
+- rubocop
+- require_not_found
+formatter:
+  rubocop:
+    cops: safe
+    except: []
+    only: []
+    extra_args: []
+type_checker:
+  rules: {}
+require_paths:
+- lib
+plugins: []
+max_files: 5000

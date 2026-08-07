@@ -59,6 +59,7 @@ class SecretConfigTest < Minitest::Test
         ENV["MYSQL_DATABASE"] = "other"
 
         SecretConfig.use :file, path: path, file_name: file_name
+
         assert_equal "other", SecretConfig.fetch("mysql/database")
       end
 
@@ -71,6 +72,7 @@ class SecretConfigTest < Minitest::Test
 
         SecretConfig.check_env_var = false
         SecretConfig.use :file, path: path, file_name: file_name
+
         assert_equal "secret_config_test", SecretConfig.fetch("mysql/database")
       end
     end
@@ -85,6 +87,7 @@ class SecretConfigTest < Minitest::Test
         SecretConfig.configure("mysql") do |config|
           database = config.fetch("database")
         end
+
         assert_equal "secret_config_test", database
       end
 
@@ -93,6 +96,7 @@ class SecretConfigTest < Minitest::Test
         SecretConfig.configure("mysql") do |config|
           database = config["database"]
         end
+
         assert_equal "secret_config_test", database
       end
 
@@ -101,7 +105,33 @@ class SecretConfigTest < Minitest::Test
         SecretConfig.configure("mysql") do |config|
           database = config.key?("database")
         end
-        assert_equal true, database
+
+        assert database
+      end
+    end
+
+    describe ".filters" do
+      after do
+        SecretConfig.filters = [/password/i, /key\Z/i, /passphrase/i, /secret/i, /pwd\Z/i]
+      end
+
+      it "filters the keys matching the configured patterns" do
+        SecretConfig.filters = [/database/]
+
+        assert_equal SecretConfig::FILTERED, SecretConfig.configuration.dig("mysql", "database")
+        assert_equal "127.0.0.1", SecretConfig.configuration.dig("mysql", "host")
+      end
+
+      it "matches a filter supplied as a string" do
+        SecretConfig.filters = ["host"]
+
+        assert_equal SecretConfig::FILTERED, SecretConfig.configuration.dig("mysql", "host")
+      end
+
+      it "filters nothing when set to nil" do
+        SecretConfig.filters = nil
+
+        assert_equal "secret_configrules", SecretConfig.configuration.dig("mysql", "password")
       end
     end
   end

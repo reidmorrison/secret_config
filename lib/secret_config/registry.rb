@@ -42,7 +42,7 @@ module SecretConfig
         value      = env_var_override(key, value)
         cache[key] = value unless value.nil?
       end
-      value.nil? ? nil : value.to_s
+      value&.to_s
     end
 
     # Returns [String] configuration value for the supplied key, or nil when missing.
@@ -89,7 +89,10 @@ module SecretConfig
 
     # Refresh the in-memory cached copy of the centralized configuration information.
     # Environment variable values will take precedence over the central store values.
-    def refresh!
+    #
+    # Returns true. The name cannot change to satisfy Naming/PredicateMethod, since `refresh!` is
+    # public API and is delegated from `SecretConfig.refresh!`.
+    def refresh! # rubocop:disable Naming/PredicateMethod
       existing_keys = cache.keys
       updated_keys  = []
       fetch_path(path).each_pair do |key, value|
@@ -154,7 +157,7 @@ module SecretConfig
     def convert_type(type, value)
       case type
       when :string
-        value.nil? ? nil : value.to_s
+        value&.to_s
       when :integer
         value.to_i
       when :float
@@ -179,7 +182,7 @@ module SecretConfig
     end
 
     def default_path(configured_path)
-      path = ENV["SECRET_CONFIG_PATH"] || configured_path || ENV["RAILS_ENV"]
+      path = ENV["SECRET_CONFIG_PATH"] || configured_path || ENV.fetch("RAILS_ENV", nil)
       path = Rails.env if path.nil? && defined?(Rails) && Rails.respond_to?(:env)
 
       raise(UndefinedRootError, "Either set env var 'SECRET_CONFIG_PATH' or call SecretConfig.use") unless path
@@ -188,7 +191,7 @@ module SecretConfig
     end
 
     def default_provider(provider)
-      provider = (ENV["SECRET_CONFIG_PROVIDER"] || provider || "file")
+      provider = ENV["SECRET_CONFIG_PROVIDER"] || provider || "file"
 
       return provider if provider.respond_to?(:each) && provider.respond_to?(:set)
 

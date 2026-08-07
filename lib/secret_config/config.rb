@@ -1,6 +1,7 @@
 module SecretConfig
   class Config
     extend Forwardable
+
     def_delegator :registry, :configuration
     def_delegator :registry, :refresh!
 
@@ -11,10 +12,10 @@ module SecretConfig
       @registry = registry
     end
 
-    def fetch(sub_path, **options)
+    def fetch(sub_path, **)
       raise(ArgumentError, "sub_path cannot be nil") if sub_path.nil?
 
-      registry.fetch(join_path(sub_path), **options)
+      registry.fetch(join_path(sub_path), **)
     end
 
     def [](sub_path)
