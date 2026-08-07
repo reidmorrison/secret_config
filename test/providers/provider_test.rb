@@ -28,8 +28,8 @@ module Providers
       describe "#to_h" do
         let :populated_provider do
           InMemoryProvider.new(
-            "/test/my_application/mysql/host" => "127.0.0.1",
-            "/test/my_application/mysql/port" => "3306",
+            "/test/my_application/mysql/host"    => "127.0.0.1",
+            "/test/my_application/mysql/port"    => "3306",
             "/test/other_application/mysql/host" => "192.168.0.1"
           )
         end

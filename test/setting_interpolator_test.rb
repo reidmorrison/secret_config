@@ -159,7 +159,7 @@ module SecretConfig
         it "randomly selects one of the supplied values" do
           string = "${select:one, two,three}"
           actual = interpolator.parse(string)
-          assert %w[one two three].include?(actual), actual
+          assert_includes %w[one two three], actual, actual
         end
 
         it "fails when less than 2 options are supplied" do

@@ -54,9 +54,7 @@ module SecretConfig
 
     # Empty values return nil which removes the key entirely from the config
     def select(*values)
-      if values.size < 2
-        raise(ConfigurationError, "Must supply at least 2 options when using select: #{values.inspect}")
-      end
+      raise(ConfigurationError, "Must supply at least 2 options when using select: #{values.inspect}") if values.size < 2
 
       values[SecureRandom.random_number(values.count)]
     end

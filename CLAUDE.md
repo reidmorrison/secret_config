@@ -45,6 +45,10 @@ than shipping it in a 1.x release.
 
     bundle exec bin/secret-config --help                 # CLI usage
 
+    bundle exec rubocop                                  # Lint
+    bundle exec rubocop -a                               # Safe autocorrect
+    bundle exec rubocop -A                               # Include unsafe autocorrect, review the diff
+
     bundle exec solargraph scan                          # Type-index the workspace, report load errors
     bundle exec solargraph typecheck lib/secret_config/registry.rb   # Type check one file
     bundle exec solargraph stdio                         # Language server, for editor integration
@@ -69,12 +73,16 @@ uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`). `railtie.
 before SimpleCov starts.
 
 Solargraph is configured by [.solargraph.yml](.solargraph.yml). It indexes `lib/` and `test/` and excludes
-the Jekyll docs. Its `rubocop` diagnostics reporter is deliberately disabled, since rubocop is configured
-but not bundled.
+the Jekyll docs, and reports rubocop diagnostics through the language server.
 
-There is a [.rubocop.yml](.rubocop.yml) but rubocop is not in the Gemfile, so it is not run in CI. Match the
-style it encodes: double-quoted strings, trailing dot position, table-aligned hashes and assignments,
-128-character lines.
+Rubocop is bundled, with `rubocop-minitest` and `rubocop-rake` loaded as plugins in
+[.rubocop.yml](.rubocop.yml). It is not yet wired into CI, so run it locally. The style it encodes:
+double-quoted strings, trailing dot position, table-aligned hashes and assignments, 128-character lines.
+
+Safe autocorrect is clean. The offenses that remain are deliberate and should not be "fixed" blindly:
+suppressed `ParameterNotFound` rescues in the SSM provider, `Lint/MissingSuper` in providers whose base
+class has no `initialize`, the `Metrics/*` complexity of `cli.rb`, and long help strings in `cli.rb` that
+cannot be wrapped further.
 
 ## Architecture
 

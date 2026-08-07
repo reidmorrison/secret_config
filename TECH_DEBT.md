@@ -149,8 +149,17 @@ other than `path` into `provider_args`, so it reaches the provider constructor i
 The concept is already user facing via the CLI's `--interpolate`. Consider extracting `interpolate:`
 explicitly in `use`.
 
-### 14. Supported Ruby version floor is inconsistent **[breaking]**
+### 14. Supported Ruby version floor is inconsistent **[breaking]** — RESOLVED
 
-The gemspec declares `required_ruby_version >= 2.3` and [.rubocop.yml](.rubocop.yml) targets 2.5, but
-[.github/workflows/ci.yml](.github/workflows/ci.yml) covers 3.2 through 4.0 and 1.0.0 has shipped.
-Consider raising both to match what is actually tested.
+The gemspec declared `required_ruby_version >= 2.3` and [.rubocop.yml](.rubocop.yml) targeted 2.5, while
+[.github/workflows/ci.yml](.github/workflows/ci.yml) covers 3.2 through 4.0.
+
+Both were raised to 3.2 to match what is actually tested. This is a breaking change and ships in v2.
+
+## Not tracked here
+
+Rubocop reports 28 remaining offenses that safe autocorrect cannot fix. They are pre-existing style and
+complexity findings rather than defects, so they are not itemized above. Run `bundle exec rubocop` to see
+them. Nine are correctable with `rubocop -A`, which applies unsafe corrections and needs the diff reviewed.
+
+Rubocop is not yet wired into CI.

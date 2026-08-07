@@ -188,7 +188,7 @@ module SecretConfig
     end
 
     def default_provider(provider)
-      provider = (ENV["SECRET_CONFIG_PROVIDER"] || provider || "file")
+      provider = ENV["SECRET_CONFIG_PROVIDER"] || provider || "file"
 
       return provider if provider.respond_to?(:each) && provider.respond_to?(:set)
 

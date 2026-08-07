@@ -13,9 +13,8 @@ exclude:
 - ".bundle/**/*"
 require: []
 domains: []
-# The `rubocop` reporter is omitted deliberately: rubocop is configured in
-# .rubocop.yml but is not a bundled dependency, so the reporter cannot run.
 reporters:
+- rubocop
 - require_not_found
 formatter:
   rubocop:

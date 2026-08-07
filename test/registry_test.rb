@@ -181,7 +181,7 @@ class RegistryTest < Minitest::Test
         assert_equal "Unrecognized type:array", error.message
       end
 
-      # Note: a block is only consulted when a default is also supplied, since the missing key check
+      # NOTE: a block is only consulted when a default is also supplied, since the missing key check
       # runs first. See TECH_DEBT.md.
       it "prefers a block over the supplied default when the key is missing" do
         assert_equal "from_block", registry.fetch("mysql/unknown", default: "unused") { "from_block" }

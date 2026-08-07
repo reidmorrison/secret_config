@@ -19,7 +19,7 @@ class UtilsTest < Minitest::Test
 
     describe ".flatten" do
       it "returns a copy of the config" do
-        h = SecretConfig::Utils.flatten(hash_registry, path = nil)
+        h = SecretConfig::Utils.flatten(hash_registry, nil)
         assert_equal(flat_registry, h)
       end
 

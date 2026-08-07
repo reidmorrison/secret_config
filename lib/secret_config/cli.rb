@@ -117,11 +117,13 @@ module SecretConfig
           secret-config [options]
         BANNER
 
-        opts.on "-e", "--export SOURCE_PATH", "Export configuration. Use --file to specify the file name, otherwise stdout is used." do |path|
+        opts.on "-e", "--export SOURCE_PATH",
+                "Export configuration. Use --file to specify the file name, otherwise stdout is used." do |path|
           @export = path
         end
 
-        opts.on "-i", "--import TARGET_PATH", "Import configuration. Use --file to specify the file name, --path for the SOURCE_PATH, otherwise stdin is used." do |path|
+        opts.on "-i", "--import TARGET_PATH",
+                "Import configuration. Use --file to specify the file name, --path for the SOURCE_PATH, otherwise stdin is used." do |path|
           @import = path
         end
 
@@ -133,7 +135,8 @@ module SecretConfig
           @path = path
         end
 
-        opts.on "--diff TARGET_PATH", "Compare configuration to this path. Use --file to specify the source file name, --path for the SOURCE_PATH, otherwise stdin is used." do |file_name|
+        opts.on "--diff TARGET_PATH",
+                "Compare configuration to this path. Use --file to specify the source file name, --path for the SOURCE_PATH, otherwise stdin is used." do |file_name|
           @diff = file_name
         end
 
@@ -172,15 +175,18 @@ module SecretConfig
           @interpolate = true
         end
 
-        opts.on "--prune", "For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import." do
+        opts.on "--prune",
+                "For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import." do
           @prune = true
         end
 
-        opts.on "--force", "For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key." do
+        opts.on "--force",
+                "For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key." do
           @force = true
         end
 
-        opts.on "--key_id KEY_ID", "For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key." do |key_id|
+        opts.on "--key_id KEY_ID",
+                "For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key." do |key_id|
           @key_id = key_id
         end
 
@@ -188,7 +194,8 @@ module SecretConfig
           @key_alias = key_alias
         end
 
-        opts.on "--random_size INTEGER", Integer, "For --import only. Size to use when generating random values when $(random) is encountered in the source. Default: 32" do |random_size|
+        opts.on "--random_size INTEGER", Integer,
+                "For --import only. Size to use when generating random values when $(random) is encountered in the source. Default: 32" do |random_size|
           @random_size = random_size
         end
 
@@ -207,19 +214,17 @@ module SecretConfig
 
     def provider_instance
       @provider_instance ||=
-        begin
-          case provider
-          when :ssm
-            if key_alias
-              Providers::Ssm.new(key_alias: key_alias)
-            elsif key_id
-              Providers::Ssm.new(key_id: key_id)
-            else
-              Providers::Ssm.new
-            end
+        case provider
+        when :ssm
+          if key_alias
+            Providers::Ssm.new(key_alias: key_alias)
+          elsif key_id
+            Providers::Ssm.new(key_id: key_id)
           else
-            raise ArgumentError, "Invalid provider: #{provider}"
+            Providers::Ssm.new
           end
+        else
+          raise ArgumentError, "Invalid provider: #{provider}"
         end
     end
 
