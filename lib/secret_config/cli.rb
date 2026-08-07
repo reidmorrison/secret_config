@@ -4,7 +4,7 @@ require "erb"
 require "yaml"
 require "json"
 require "securerandom"
-require "irb"
+# require "irb"
 
 module SecretConfig
   class CLI
