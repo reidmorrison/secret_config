@@ -20,11 +20,13 @@ class UtilsTest < Minitest::Test
     describe ".flatten" do
       it "returns a copy of the config" do
         h = SecretConfig::Utils.flatten(hash_registry, nil)
+
         assert_equal(flat_registry, h)
       end
 
       it "prefixes every key with the supplied path" do
         h = SecretConfig::Utils.flatten({"mysql" => {"host" => "127.0.0.1"}}, "/test")
+
         assert_equal({"/test/mysql/host" => "127.0.0.1"}, h)
       end
     end

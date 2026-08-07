@@ -40,7 +40,7 @@ module Providers
 
         let :ssm_extended_provider do
           SecretConfig::Providers::Ssm.new(credentials: ::Aws::AssumeRoleCredentials.new(
-            role_arn:          "arn:aws:iam::#{ENV['SECRET_CONFIG_ACCOUNT_ID']}:role/secret_config_test",
+            role_arn:          "arn:aws:iam::#{ENV.fetch('SECRET_CONFIG_ACCOUNT_ID', nil)}:role/secret_config_test",
             role_session_name: "SecretConfigSession-#{SecureRandom.uuid}"
           ))
         end

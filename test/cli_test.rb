@@ -18,6 +18,7 @@ class CLITest < Minitest::Test
           error = assert_raises(SystemExit) { SecretConfig::CLI.new([]) }
           assert_equal(-10, error.status)
         end
+
         assert_includes out, "secret-config [options]"
       end
 
@@ -25,6 +26,7 @@ class CLITest < Minitest::Test
         out, = capture_io do
           assert_raises(SystemExit) { SecretConfig::CLI.new(["--help"]) }
         end
+
         assert_includes out, "Prints this help."
       end
     end

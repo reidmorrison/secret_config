@@ -8,17 +8,18 @@ module SecretConfig
       attr_reader :file_name
 
       def initialize(file_name: "config/application.yml")
+        super()
         @file_name = file_name
         raise(ConfigurationError, "Cannot find config file: #{file_name}") unless ::File.exist?(file_name)
       end
 
       # Yields the key with its absolute path and corresponding string value
-      def each(path, &block)
+      def each(path, &)
         settings = fetch_path(path)
 
         raise(ConfigurationError, "Path #{paths.join('/')} not found in file: #{file_name}") unless settings
 
-        Utils.flatten_each(settings, path, &block)
+        Utils.flatten_each(settings, path, &)
         nil
       end
 

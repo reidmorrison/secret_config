@@ -1,4 +1,4 @@
-$LOAD_PATH.unshift File.dirname(__FILE__) + "/../lib"
+$LOAD_PATH.unshift "#{File.dirname(__FILE__)}/../lib"
 
 # Defines CGI up front so that amazing_print's `autoload :CGI, "cgi"` is a no-op.
 # Ruby 4.0 removed cgi from the stdlib, leaving a shim that warns and re-requires
@@ -30,6 +30,7 @@ class InMemoryProvider < SecretConfig::Providers::Provider
   attr_reader :hash
 
   def initialize(hash = {})
+    super()
     @hash = hash.dup
   end
 

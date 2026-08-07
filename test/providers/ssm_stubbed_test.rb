@@ -62,6 +62,7 @@ module Providers
             "#{path}/mysql/host"     => "127.0.0.1",
             "#{path}/mysql/database" => "secret_config_test"
           }
+
           assert_equal expected, paths
         end
 
@@ -106,7 +107,9 @@ module Providers
           exhausted.client.stub_responses(:get_parameters_by_path, "ThrottlingException")
 
           assert_raises Aws::SSM::Errors::ThrottlingException do
-            exhausted.each(path) { |_key, _value| }
+            exhausted.each(path) do |_key, _value|
+              # Never reached, the throttling error is raised before the first parameter is yielded.
+            end
           end
         end
       end
@@ -118,6 +121,7 @@ module Providers
           provider.set("#{path}/mysql/host", "127.0.0.1")
 
           request = provider.client.api_requests.last
+
           assert_equal :put_parameter, request[:operation_name]
           assert_equal "#{path}/mysql/host", request[:params][:name]
           assert_equal "127.0.0.1", request[:params][:value]
@@ -142,6 +146,7 @@ module Providers
           provider.delete("#{path}/mysql/host")
 
           request = provider.client.api_requests.last
+
           assert_equal :delete_parameter, request[:operation_name]
           assert_equal "#{path}/mysql/host", request[:params][:name]
         end

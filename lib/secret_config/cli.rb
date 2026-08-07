@@ -81,18 +81,18 @@ module SecretConfig
       elsif export
         raise(ArgumentError, "--path option is not valid for --export") if path
 
-        run_export(export, file_name || STDOUT, filtered: !no_filter)
+        run_export(export, file_name || $stdout, filtered: !no_filter)
       elsif import
         if path
           run_import_path(import, path, prune, force)
         else
-          run_import(import, file_name || STDIN, prune, force)
+          run_import(import, file_name || $stdin, prune, force)
         end
       elsif diff
         if path
           run_diff_path(diff, path)
         else
-          run_diff(diff, file_name || STDIN)
+          run_diff(diff, file_name || $stdin)
         end
       elsif set_key
         run_set(set_key, set_value)
@@ -123,7 +123,8 @@ module SecretConfig
         end
 
         opts.on "-i", "--import TARGET_PATH",
-                "Import configuration. Use --file to specify the file name, --path for the SOURCE_PATH, otherwise stdin is used." do |path|
+                "Import configuration. Use --file to specify the file name, --path for the SOURCE_PATH, " \
+                "otherwise stdin is used." do |path|
           @import = path
         end
 
@@ -136,7 +137,8 @@ module SecretConfig
         end
 
         opts.on "--diff TARGET_PATH",
-                "Compare configuration to this path. Use --file to specify the source file name, --path for the SOURCE_PATH, otherwise stdin is used." do |file_name|
+                "Compare configuration to this path. Use --file to specify the source file name, " \
+                "--path for the SOURCE_PATH, otherwise stdin is used." do |file_name|
           @diff = file_name
         end
 
@@ -176,7 +178,8 @@ module SecretConfig
         end
 
         opts.on "--prune",
-                "For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import." do
+                "For --import only. During import delete all existing keys for which there is no key " \
+                "in the import file. Only works with --import." do
           @prune = true
         end
 
@@ -195,7 +198,8 @@ module SecretConfig
         end
 
         opts.on "--random_size INTEGER", Integer,
-                "For --import only. Size to use when generating random values when $(random) is encountered in the source. Default: 32" do |random_size|
+                "For --import only. Size to use when generating random values when $(random) is " \
+                "encountered in the source. Default: 32" do |random_size|
           @random_size = random_size
         end
 
@@ -379,7 +383,7 @@ module SecretConfig
     end
 
     def prefix_lines(prefix, value)
-      value.to_s.lines.collect { |line| "#{prefix}#{line}" }.join("")
+      value.to_s.lines.collect { |line| "#{prefix}#{line}" }.join
     end
 
     def import_config(config, path, prune, force)
@@ -410,9 +414,9 @@ module SecretConfig
       return file_name_or_io.write(data) unless file_name_or_io.is_a?(String)
 
       output_path = ::File.dirname(file_name_or_io)
-      FileUtils.mkdir_p(output_path) unless ::File.exist?(output_path)
+      FileUtils.mkdir_p(output_path)
 
-      ::File.open(file_name_or_io, "w") { |io| io.write(data) }
+      ::File.write(file_name_or_io, data)
     end
 
     def render(hash, format)
@@ -456,12 +460,12 @@ module SecretConfig
       SecureRandom.urlsafe_base64(random_size)
     end
 
-    def sort_hash_by_key!(h)
-      h.keys.sort.each do |key|
-        value = h[key] = h.delete(key)
+    def sort_hash_by_key!(hash)
+      hash.keys.sort.each do |key|
+        value = hash[key] = hash.delete(key)
         sort_hash_by_key!(value) if value.is_a?(Hash)
       end
-      h
+      hash
     end
   end
 end

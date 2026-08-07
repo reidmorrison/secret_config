@@ -59,6 +59,7 @@ class SecretConfigTest < Minitest::Test
         ENV["MYSQL_DATABASE"] = "other"
 
         SecretConfig.use :file, path: path, file_name: file_name
+
         assert_equal "other", SecretConfig.fetch("mysql/database")
       end
 
@@ -71,6 +72,7 @@ class SecretConfigTest < Minitest::Test
 
         SecretConfig.check_env_var = false
         SecretConfig.use :file, path: path, file_name: file_name
+
         assert_equal "secret_config_test", SecretConfig.fetch("mysql/database")
       end
     end
@@ -85,6 +87,7 @@ class SecretConfigTest < Minitest::Test
         SecretConfig.configure("mysql") do |config|
           database = config.fetch("database")
         end
+
         assert_equal "secret_config_test", database
       end
 
@@ -93,6 +96,7 @@ class SecretConfigTest < Minitest::Test
         SecretConfig.configure("mysql") do |config|
           database = config["database"]
         end
+
         assert_equal "secret_config_test", database
       end
 
@@ -101,7 +105,8 @@ class SecretConfigTest < Minitest::Test
         SecretConfig.configure("mysql") do |config|
           database = config.key?("database")
         end
-        assert_equal true, database
+
+        assert database
       end
     end
 

@@ -79,10 +79,13 @@ Rubocop is bundled, with `rubocop-minitest` and `rubocop-rake` loaded as plugins
 [.rubocop.yml](.rubocop.yml). It is not yet wired into CI, so run it locally. The style it encodes:
 double-quoted strings, trailing dot position, table-aligned hashes and assignments, 128-character lines.
 
-Safe autocorrect is clean. The offenses that remain are deliberate and should not be "fixed" blindly:
-suppressed `ParameterNotFound` rescues in the SSM provider, `Lint/MissingSuper` in providers whose base
-class has no `initialize`, the `Metrics/*` complexity of `cli.rb`, and long help strings in `cli.rb` that
-cannot be wrapped further.
+Rubocop reports no offenses. Keep it that way rather than accumulating a backlog. Two suppressions are
+deliberate and documented in place:
+
+- `Naming/PredicateMethod` is disabled inline on `Registry#refresh!`, which returns `true` but cannot be
+  renamed because it is public API delegated from `SecretConfig.refresh!`.
+- The `Metrics/*` cops exclude `cli.rb`. Its command implementations have no test coverage, so refactoring
+  for the metrics is not safe yet. See [TECH_DEBT.md](TECH_DEBT.md).
 
 ## Architecture
 

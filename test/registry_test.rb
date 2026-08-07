@@ -57,6 +57,7 @@ class RegistryTest < Minitest::Test
       it "has key" do
         expected.each_pair do |key, _value|
           key = key.sub("#{path}/", "")
+
           assert registry.key?(key), "Path: #{key}"
         end
       end
@@ -74,6 +75,7 @@ class RegistryTest < Minitest::Test
       it "returns values" do
         expected.each_pair do |key, value|
           key = key.sub("#{path}/", "")
+
           assert_equal value, registry[key], "Path: #{key}"
         end
       end
@@ -91,6 +93,7 @@ class RegistryTest < Minitest::Test
       it "returns values" do
         expected.each_pair do |key, value|
           key = key.sub("#{path}/", "")
+
           assert_equal value, registry.fetch(key), "Path: #{key}"
         end
       end
@@ -112,7 +115,7 @@ class RegistryTest < Minitest::Test
       end
 
       it "returns default with false value" do
-        assert_equal false, registry.fetch("/test/invalid/path", default: false, type: :boolean)
+        refute registry.fetch("/test/invalid/path", default: false, type: :boolean)
       end
 
       it "converts to integer" do
@@ -122,26 +125,31 @@ class RegistryTest < Minitest::Test
       describe "uses separator to extract an array" do
         it "of strings" do
           value = registry.fetch("mysql/hostnames", separator: ",")
+
           assert_equal ["primary.example.net", "secondary.example.net", "backup.example.net"], value
         end
 
         it "of strings with spaces" do
           value = registry.fetch("mysql/hostnames2", separator: ",")
+
           assert_equal ["primary.example.net", "secondary.example.net", "backup.example.net"], value
         end
 
         it "of integers" do
           value = registry.fetch("mysql/ports", type: :integer, separator: ",")
+
           assert_equal([12_345, 5343, 26_815], value)
         end
 
         it "of integers with spaces" do
           value = registry.fetch("mysql/ports2", type: :integer, separator: ",")
+
           assert_equal([12_345, 5343, 26_815], value)
         end
 
         it "accepts a default without requiring conversion" do
           value = registry.fetch("mysql/ports5", type: :integer, separator: ",", default: [23, 45, 72])
+
           assert_equal([23, 45, 72], value)
         end
       end
@@ -261,8 +269,8 @@ class RegistryTest < Minitest::Test
       end
 
       it "raises when no path can be determined" do
-        original_path = ENV["SECRET_CONFIG_PATH"]
-        original_env  = ENV["RAILS_ENV"]
+        original_path = ENV.fetch("SECRET_CONFIG_PATH", nil)
+        original_env  = ENV.fetch("RAILS_ENV", nil)
         ENV["SECRET_CONFIG_PATH"] = nil
         ENV["RAILS_ENV"]          = nil
 
@@ -275,7 +283,7 @@ class RegistryTest < Minitest::Test
       end
 
       it "reads the path from SECRET_CONFIG_PATH" do
-        original_path             = ENV["SECRET_CONFIG_PATH"]
+        original_path             = ENV.fetch("SECRET_CONFIG_PATH", nil)
         ENV["SECRET_CONFIG_PATH"] = "/test/my_application"
 
         assert_equal "/test/my_application", SecretConfig::Registry.new(path: "/ignored", provider: provider).path

@@ -17,7 +17,7 @@ module SecretConfig
     def parse(string)
       string.gsub(/\${1,2}\{([^}]+)\}/) do |match|
         if match.start_with?("$$")
-          match[1..-1]
+          match[1..]
         else
           expr          = Regexp.last_match(1) || Regexp.last_match(2) || match.tr("${}", "")
           key, args_str = expr.split(":")
