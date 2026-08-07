@@ -4,14 +4,6 @@ Welcome to Secret Config, great to have you on-board. :tada:
 
 To get you started here are some pointers. 
 
-## Questions
-
-Please do not open issues for questions, they should be posted in Gitter at: 
-https://gitter.im/rocketjob/support
-
-If you have any questions about the steps below, or want to discuss a proposed code change or fix
-post them in Gitter at: https://gitter.im/rocketjob/support
-
 ## Open Source
 
 #### Early Adopters

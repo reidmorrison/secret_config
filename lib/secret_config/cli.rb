@@ -112,7 +112,7 @@ module SecretConfig
         opts.banner = <<~BANNER
           Secret Config v#{VERSION}
 
-            For more information, see: https://rocketjob.github.io/secret_config/
+            For more information, see: https://config.reidmorrison.com/
 
           secret-config [options]
         BANNER
