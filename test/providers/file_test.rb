@@ -42,7 +42,7 @@ module Providers
           file_provider = SecretConfig::Providers::File.new(file_name: file_name)
 
           error = assert_raises(SecretConfig::ConfigurationError) do
-            file_provider.each("/test/missing") { }
+            file_provider.each("/test/missing") { nil }
           end
 
           assert_equal "Path /test/missing not found in file: #{file_name}", error.message
