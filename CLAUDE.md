@@ -56,9 +56,17 @@ Tests are Minitest with the `describe`/`it` spec DSL nested inside `Minitest::Te
 `-w` (warnings on) via the Rake test task. CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs
 `bundle exec rake` on Ruby 3.2, 3.3, 3.4, and 4.0.
 
-SimpleCov runs on every test run and writes `coverage/index.html` (gitignored). Line and branch coverage
-are printed at the end of the run; the baseline is 83.86% line / 60.00% branch. No minimum threshold is
-enforced, so coverage cannot fail the build.
+SimpleCov runs on every test run and writes `coverage/index.html` (gitignored). No minimum threshold is
+enforced, so coverage cannot fail the build. `track_files "lib/**/*.rb"` is set deliberately: `cli.rb` and
+`railtie.rb` are autoloaded, and without it they are omitted from the report rather than counted as
+uncovered, which inflates the total.
+
+The baseline is 77.13% line / 57.02% branch. Every file is at 100% except `cli.rb` (48.4%, argument
+parsing is covered but the command implementations are not), `providers/file.rb` (88.0%, the uncovered
+lines are the broken `#fetch` in TECH_DEBT.md and a Psych 3 fallback), and `providers/ssm.rb` (97.2%, the
+uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`). `railtie.rb` and `version.rb` report
+0% for structural reasons: the railtie is only loaded under Rails, and the gemspec loads `version.rb`
+before SimpleCov starts.
 
 Solargraph is configured by [.solargraph.yml](.solargraph.yml). It indexes `lib/` and `test/` and excludes
 the Jekyll docs. Its `rubocop` diagnostics reporter is deliberately disabled, since rubocop is configured
@@ -146,8 +154,22 @@ backends require their gem inside a `begin/rescue LoadError` that re-raises with
 
 Fixtures live in [test/config/application.yml](test/config/application.yml), which exercises interpolation,
 `__import__`, node-plus-branch values, and comma-separated lists. Registry tests build a
-`Providers::File` against that file with path `/test/my_application` or `/test/other_application`. SSM tests
-use `Minitest::Mock` against a stubbed `Aws::SSM::Client` and do not hit AWS.
+`Providers::File` against that file with path `/test/my_application` or `/test/other_application`.
+
+`InMemoryProvider` in [test/test_helper.rb](test/test_helper.rb) is a writable provider for exercising
+`set` and `delete`, which the file provider does not implement.
+
+There are two SSM test files. [test/providers/ssm_stubbed_test.rb](test/providers/ssm_stubbed_test.rb)
+passes `stub_responses: true` and `region:` through `Ssm#initialize` into `Aws::SSM::Client`, so it never
+touches AWS and runs everywhere; use it for new SSM coverage.
+[test/providers/ssm_test.rb](test/providers/ssm_test.rb) does a live round trip and skips unless
+`AWS_ACCESS_KEY_ID` is set, which is the source of the suite's 2 skips.
+
+Some tests deliberately assert current, undesired behavior (the `--set` truncation and the `-f` collision
+in [test/cli_test.rb](test/cli_test.rb), the `fetch` block precedence in
+[test/registry_test.rb](test/registry_test.rb)). They carry a comment pointing at
+[TECH_DEBT.md](TECH_DEBT.md); update them when fixing the underlying issue rather than treating a failure
+there as a regression.
 
 [test/test_helper.rb](test/test_helper.rb) requires `cgi/escape` before `amazing_print` on purpose: Ruby 4.0
 removed `cgi` from stdlib and the shim warns if loaded reentrantly. Keep that require first.

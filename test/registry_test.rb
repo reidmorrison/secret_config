@@ -149,6 +149,139 @@ class RegistryTest < Minitest::Test
       it "decodes Base 64" do
         assert_equal "ABCDEF1234567890ABCDEF1234567890", registry.fetch("symmetric_encryption/key", encoding: :base64)
       end
+
+      it "passes the value through for an unrecognized encoding" do
+        assert_equal "2", registry.fetch("symmetric_encryption/version", encoding: :unknown)
+      end
+
+      it "converts to float" do
+        assert_in_delta 0.25, registry.fetch("mysql/unknown", default: "0.25", type: :float)
+      end
+
+      it "converts to symbol" do
+        assert_equal :info, registry.fetch("mysql/unknown", default: "info", type: :symbol)
+      end
+
+      it "converts a blank value to nil when converting to symbol" do
+        assert_nil registry.fetch("mysql/unknown", default: "  ", type: :symbol)
+      end
+
+      it "converts to json" do
+        assert_equal({"a" => 1}, registry.fetch("mysql/unknown", default: '{"a":1}', type: :json))
+      end
+
+      it "returns nil when converting a nil default to json" do
+        assert_nil registry.fetch("mysql/unknown", default: nil, type: :json)
+      end
+
+      it "raises for an unrecognized type" do
+        error = assert_raises ArgumentError do
+          registry.fetch("mysql/unknown", default: "value", type: :array)
+        end
+        assert_equal "Unrecognized type:array", error.message
+      end
+
+      # Note: a block is only consulted when a default is also supplied, since the missing key check
+      # runs first. See TECH_DEBT.md.
+      it "prefers a block over the supplied default when the key is missing" do
+        assert_equal "from_block", registry.fetch("mysql/unknown", default: "unused") { "from_block" }
+      end
+
+      it "raises when a block is supplied without a default" do
+        assert_raises SecretConfig::MissingMandatoryKey do
+          registry.fetch("mysql/unknown") { "from_block" }
+        end
+      end
+    end
+
+    describe "writing" do
+      let :provider do
+        InMemoryProvider.new(
+          "/test/my_application/mysql/database" => "secret_config_test",
+          "/test/my_application/mysql/host"     => "127.0.0.1"
+        )
+      end
+
+      describe "#set" do
+        it "writes through to the provider using the absolute key" do
+          registry.set("mysql/username", "secret_config")
+
+          assert_equal "secret_config", provider.hash["/test/my_application/mysql/username"]
+          assert_equal "secret_config", registry["mysql/username"]
+        end
+
+        it "does not expand a key that is already absolute" do
+          registry.set("/other_application/mysql/username", "other")
+
+          assert_equal "other", provider.hash["/other_application/mysql/username"]
+        end
+
+        it "is aliased by #[]=" do
+          registry["mysql/username"] = "via_brackets"
+
+          assert_equal "via_brackets", provider.hash["/test/my_application/mysql/username"]
+        end
+      end
+
+      describe "#delete" do
+        it "removes the key from the provider and the cache" do
+          registry.delete("mysql/host")
+
+          refute provider.hash.key?("/test/my_application/mysql/host")
+          refute registry.key?("mysql/host")
+        end
+      end
+
+      describe "#refresh!" do
+        it "picks up keys added to the provider" do
+          refute registry.key?("mysql/port")
+          provider.set("/test/my_application/mysql/port", "3306")
+
+          registry.refresh!
+
+          assert_equal "3306", registry["mysql/port"]
+        end
+
+        it "drops keys removed from the provider" do
+          assert registry.key?("mysql/host")
+          provider.delete("/test/my_application/mysql/host")
+
+          registry.refresh!
+
+          refute registry.key?("mysql/host")
+        end
+      end
+    end
+
+    describe "path resolution" do
+      it "prefixes a relative path with a slash" do
+        registry = SecretConfig::Registry.new(path: "test/my_application", provider: provider)
+
+        assert_equal "/test/my_application", registry.path
+      end
+
+      it "raises when no path can be determined" do
+        original_path = ENV["SECRET_CONFIG_PATH"]
+        original_env  = ENV["RAILS_ENV"]
+        ENV["SECRET_CONFIG_PATH"] = nil
+        ENV["RAILS_ENV"]          = nil
+
+        assert_raises SecretConfig::UndefinedRootError do
+          SecretConfig::Registry.new(provider: provider)
+        end
+      ensure
+        ENV["SECRET_CONFIG_PATH"] = original_path
+        ENV["RAILS_ENV"]          = original_env
+      end
+
+      it "reads the path from SECRET_CONFIG_PATH" do
+        original_path             = ENV["SECRET_CONFIG_PATH"]
+        ENV["SECRET_CONFIG_PATH"] = "/test/my_application"
+
+        assert_equal "/test/my_application", SecretConfig::Registry.new(path: "/ignored", provider: provider).path
+      ensure
+        ENV["SECRET_CONFIG_PATH"] = original_path
+      end
     end
   end
 end

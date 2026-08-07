@@ -30,7 +30,33 @@ which is a local variable inside `fetch_path`, not in scope at the raise site.
 The intended `ConfigurationError` never surfaces, so a typo'd path in `application.yml` gives a developer
 a `NameError` instead of a useful message.
 
-### 3. `key?` and `[]` disagree about env-var-only keys **[breaking]**
+### 3. `--set` truncates any value containing `=`
+
+[lib/secret_config/cli.rb:141](lib/secret_config/cli.rb#L141) uses `param.split("=")`, which splits on
+every `=` rather than just the first, so the value is silently truncated:
+
+    --set symmetric_encryption/key=QUJDREVG12345=
+    => key "symmetric_encryption/key", value "QUJDREVG12345"
+
+The trailing `=` is gone. This matters specifically for this gem, since base64 encryption keys and
+initialization vectors are padded with `=` and are exactly the kind of value stored here. A truncated key
+is written without error and fails later at decryption time.
+
+`param.split("=", 2)` fixes it. Locked in by a test in [test/cli_test.rb](test/cli_test.rb) that documents
+the current behavior; update that test when fixing.
+
+### 4. `-f` is bound to both `--file` and `--fetch`
+
+[lib/secret_config/cli.rb:128](lib/secret_config/cli.rb#L128) defines `-f, --file` and
+[cli.rb:147](lib/secret_config/cli.rb#L147) defines `-f, --fetch`. OptionParser lets the later definition
+win, so `--file` has no working short form:
+
+    -f application.yml  =>  fetch_key "application.yml", file_name nil
+
+Anyone following the docs and using `-f` to name an import or export file silently runs a fetch instead.
+Give `--fetch` a different short option, or drop the short form from one of them.
+
+### 5. `key?` and `[]` disagree about env-var-only keys **[breaking]**
 
 `Registry#[]` memoizes an env-var override into the cache on a miss, but `Registry#key?` reads the cache
 directly, so the answer changes depending on whether the key has been read yet.
@@ -48,7 +74,7 @@ Decide whether `key?` should consult env vars when `check_env_var?` is true.
 
 ## Doc and code drift
 
-### 4. SSM retry defaults are documented incorrectly
+### 6. SSM retry defaults are documented incorrectly
 
 [docs/config.md](docs/config.md) documents `retry_count` default 10 and `retry_max_ms` default 3_000.
 [lib/secret_config/providers/ssm.rb:17-18](lib/secret_config/providers/ssm.rb#L17-L18) uses 25 and 10_000.
@@ -61,7 +87,7 @@ strategy.
 Correcting the docs is non-breaking. Changing the code defaults to match the docs would be **[breaking]**,
 since it would quadruple the retry count and shorten the sleep window for existing users.
 
-### 5. `array` is documented as a supported type but is not one
+### 7. `array` is documented as a supported type but is not one
 
 [docs/index.md](docs/index.md) lists `array` alongside `integer`, `float`, `string`, `boolean`, `symbol`,
 and `json`. `Registry#convert_type` has no such branch:
@@ -70,7 +96,7 @@ and `json`. `Registry#convert_type` has no such branch:
 
 Arrays are produced by `separator:` instead. Either drop `array` from the docs or add it as an alias.
 
-### 6. `SECRET_CONFIG_ACCOUNT_ID` is documented as a required env var but is unused by the library
+### 8. `SECRET_CONFIG_ACCOUNT_ID` is documented as a required env var but is unused by the library
 
 The env var table in [docs/config.md](docs/config.md) lists it with priority "required". It appears
 nowhere in `lib/`. Its only use is [test/providers/ssm_test.rb:43](test/providers/ssm_test.rb#L43), where
@@ -78,7 +104,7 @@ it builds a role ARN. The row also says "used in `rspec`", but the test suite is
 
 Move it to a contributor doc or remove the row.
 
-### 7. Three spellings of the import-time random token
+### 9. Three spellings of the import-time random token
 
 The constant is `$(random)` and the `--random_size` help text agrees, but the prose at
 [docs/cli.md:114](docs/cli.md#L114) tells users to set the value to `$random`, which will not match the
@@ -86,7 +112,7 @@ The constant is `$(random)` and the `--random_size` help text agrees, but the pr
 
 ## Design questions
 
-### 8. `$(random)` and `${random}` are near-identical syntax for different features
+### 10. `$(random)` and `${random}` are near-identical syntax for different features
 
 `$(random)` is materialized once during a CLI `--import` and persisted to the store. `${random}` is
 regenerated on every startup and every `refresh!`. A user who writes `${random}` for a database password
@@ -97,7 +123,7 @@ Decide whether the collision is acceptable, and at minimum document the distinct
 syntax is **[breaking]** and would need a v2 upgrade note, in the style of the `%{}` to `${}` migration
 already described in [README.md](README.md).
 
-### 9. `__import__` is effectively undocumented
+### 11. `__import__` is effectively undocumented
 
 Its only mention across all of `docs/` is inside the `--interpolate` flag description in
 [docs/cli.md](docs/cli.md). The same applies to `__value__` (`NODE_KEY`), which users hit as soon as a
@@ -106,14 +132,14 @@ node is both a value and a branch.
 Decide whether `__import__` is deliberately unadvertised because of its stated limits (imports cannot
 reference other imports) or whether this is simply a documentation gap.
 
-### 10. `${fetch: ...}` is half-implemented
+### 12. `${fetch: ...}` is half-implemented
 
 `apply_fetches` is commented out in [lib/secret_config/parser.rb:32-34](lib/secret_config/parser.rb#L32-L34),
 along with a commented-out `"${fetch: /test/my_application/mysql/database }"` in
 [test/config/application.yml](test/config/application.yml). There is also a leftover `binding.irb` comment
 in `apply_imports`. Either finish the feature or remove the remnants.
 
-### 11. `interpolate:` is unreachable through the public API
+### 13. `interpolate:` is unreachable through the public API
 
 `Registry` accepts `interpolate:`, but `SecretConfig.use(provider, path:, **args)` funnels everything
 other than `path` into `provider_args`, so it reaches the provider constructor instead:
@@ -123,7 +149,7 @@ other than `path` into `provider_args`, so it reaches the provider constructor i
 The concept is already user facing via the CLI's `--interpolate`. Consider extracting `interpolate:`
 explicitly in `use`.
 
-### 12. Supported Ruby version floor is inconsistent **[breaking]**
+### 14. Supported Ruby version floor is inconsistent **[breaking]**
 
 The gemspec declares `required_ruby_version >= 2.3` and [.rubocop.yml](.rubocop.yml) targets 2.5, but
 [.github/workflows/ci.yml](.github/workflows/ci.yml) covers 3.2 through 4.0 and 1.0.0 has shipped.
