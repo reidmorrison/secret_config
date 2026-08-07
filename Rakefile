@@ -1,4 +1,5 @@
 require "rake/testtask"
+require "rubocop/rake_task"
 require_relative "lib/secret_config/version"
 
 desc "Build the gem"
@@ -20,4 +21,7 @@ Rake::TestTask.new(:test) do |t|
   t.warning = true
 end
 
-task default: :test
+RuboCop::RakeTask.new
+
+# Tests run first so that a lint failure never masks a real test failure.
+task default: %i[test rubocop]

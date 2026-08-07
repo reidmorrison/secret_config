@@ -36,7 +36,8 @@ than shipping it in a 1.x release.
 
 ## Commands
 
-    bundle exec rake                                     # Run all tests (default task)
+    bundle exec rake                                     # Default task: tests, then rubocop
+    bundle exec rake test                                # Tests only
     bundle exec rake test TEST=test/registry_test.rb     # Run one test file
     bundle exec rake test TEST=test/registry_test.rb TESTOPTS="-n/filters/"    # Run tests matching a name
                                                          # note: no space after -n, rake's test loader
@@ -57,8 +58,11 @@ than shipping it in a 1.x release.
     rake publish                                         # Tag, push, and push the gem to rubygems (maintainer only)
 
 Tests are Minitest with the `describe`/`it` spec DSL nested inside `Minitest::Test` subclasses, run with
-`-w` (warnings on) via the Rake test task. CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs
-`bundle exec rake` on Ruby 3.2, 3.3, 3.4, and 4.0.
+`-w` (warnings on) via the Rake test task. CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) has
+two jobs: `lint` runs `bundle exec rubocop` once on Ruby 3.4, and `test` runs `bundle exec rake test`
+across Ruby 3.2, 3.3, 3.4, and 4.0. The test job calls `rake test` rather than the default task so that
+rubocop is not repeated on every matrix entry; `TargetRubyVersion` decides which cops apply, so the lint
+result does not depend on the Ruby it runs on.
 
 SimpleCov runs on every test run and writes `coverage/index.html` (gitignored). No minimum threshold is
 enforced, so coverage cannot fail the build. `track_files "lib/**/*.rb"` is set deliberately: `cli.rb` and
@@ -76,8 +80,9 @@ Solargraph is configured by [.solargraph.yml](.solargraph.yml). It indexes `lib/
 the Jekyll docs, and reports rubocop diagnostics through the language server.
 
 Rubocop is bundled, with `rubocop-minitest` and `rubocop-rake` loaded as plugins in
-[.rubocop.yml](.rubocop.yml). It is not yet wired into CI, so run it locally. The style it encodes:
-double-quoted strings, trailing dot position, table-aligned hashes and assignments, 128-character lines.
+[.rubocop.yml](.rubocop.yml). It runs as the second half of the default rake task and as its own CI job.
+The style it encodes: double-quoted strings, trailing dot position, table-aligned hashes and assignments,
+128-character lines.
 
 Rubocop reports no offenses. Keep it that way rather than accumulating a backlog. Two suppressions are
 deliberate and documented in place:

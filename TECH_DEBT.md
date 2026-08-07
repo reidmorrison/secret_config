@@ -172,4 +172,4 @@ gems. Worth adding before the v2 release, since v2 carries breaking changes that
 
 ## Not tracked here
 
-Rubocop reports no offenses, and it is not yet wired into CI.
+Rubocop reports no offenses, runs as part of the default rake task, and has its own CI job.
