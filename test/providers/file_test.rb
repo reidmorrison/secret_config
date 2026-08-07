@@ -37,6 +37,31 @@ module Providers
             assert_equal value, paths[key], "Path: #{key}"
           end
         end
+
+        it "raises a configuration error for a missing path" do
+          file_provider = SecretConfig::Providers::File.new(file_name: file_name)
+
+          error = assert_raises(SecretConfig::ConfigurationError) do
+            file_provider.each("/test/missing") { nil }
+          end
+
+          assert_equal "Path /test/missing not found in file: #{file_name}", error.message
+        end
+      end
+
+      describe "#fetch" do
+        it "returns a value for the requested key" do
+          file_provider = SecretConfig::Providers::File.new(file_name: file_name)
+
+          assert_equal "127.0.0.1", file_provider.fetch("/test/my_application/mysql/host")
+        end
+
+        it "returns nil for a missing key or branch" do
+          file_provider = SecretConfig::Providers::File.new(file_name: file_name)
+
+          assert_nil file_provider.fetch("/test/my_application/missing")
+          assert_nil file_provider.fetch("/test/my_application/mysql")
+        end
       end
     end
   end

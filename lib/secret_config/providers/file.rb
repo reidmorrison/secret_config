@@ -17,15 +17,15 @@ module SecretConfig
       def each(path, &)
         settings = fetch_path(path)
 
-        raise(ConfigurationError, "Path #{paths.join('/')} not found in file: #{file_name}") unless settings
+        raise(ConfigurationError, "Path #{path} not found in file: #{file_name}") unless settings
 
         Utils.flatten_each(settings, path, &)
         nil
       end
 
       # Returns the value or `nil` if not found
-      def fetch(_key)
-        values = fetch_path(path)
+      def fetch(key)
+        values = fetch_path(key)
         values.is_a?(Hash) ? nil : values
       end
 
