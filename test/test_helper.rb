@@ -5,6 +5,13 @@ $LOAD_PATH.unshift File.dirname(__FILE__) + "/../lib"
 # cgi/escape while it is still loading. Present in stdlib since Ruby 2.7.
 require "cgi/escape"
 
+# Must be started before `secret_config` is required so that every line is tracked.
+require "simplecov"
+SimpleCov.start do
+  add_filter "/test/"
+  enable_coverage :branch
+end
+
 require "yaml"
 require "minitest/autorun"
 require "minitest/mock"

@@ -1,0 +1,153 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Overview
+
+`secret_config` is a Ruby gem for centralized configuration and secrets management. It reads a tree of
+key/value settings from a provider (AWS SSM Parameter Store or a local YAML file), flattens it into an
+in-memory cache at startup, and serves it through a global `SecretConfig` singleton. It ships a
+`secret-config` CLI for importing, exporting, diffing, and editing the central store.
+
+Docs source lives in [docs/](docs/) (Jekyll site published to https://config.reidmorrison.com/).
+
+Known issues and open design questions are tracked in [TECH_DEBT.md](TECH_DEBT.md). Check it before
+"fixing" surprising behavior, and add to it when a review turns up something that is not being fixed now.
+
+## Git workflow
+
+Never commit directly to `master`. Create a feature branch first, commit there, and open a pull request.
+This applies to documentation and config changes too, not just code. If asked to commit while `master` is
+checked out, branch first, then commit.
+
+## Versioning and backward compatibility
+
+This project follows [Semantic Versioning](https://semver.org/). Backward compatibility is a priority:
+strive to preserve existing behavior, and confine breaking changes to major releases. Within a minor or
+patch release, do not change the meaning of an existing key, the return type of an existing call, the
+default value of an existing option, or the supported Ruby floor.
+
+When a fix would change observable behavior, say so explicitly and let the maintainer decide whether it
+waits for the next major release rather than folding it in silently.
+
+The current version is 1.0.0. **A v2 release is planned to carry the pending changes in
+[TECH_DEBT.md](TECH_DEBT.md)**, several of which are deliberately breaking. Target that work at v2 rather
+than shipping it in a 1.x release.
+
+## Commands
+
+    bundle exec rake                                     # Run all tests (default task)
+    bundle exec rake test TEST=test/registry_test.rb     # Run one test file
+    bundle exec rake test TEST=test/registry_test.rb TESTOPTS="-n/filters/"    # Run tests matching a name
+                                                         # note: no space after -n, rake's test loader
+                                                         # otherwise treats the pattern as a filename
+    bundle exec ruby -Ilib test/registry_test.rb         # Run one file directly
+
+    bundle exec bin/secret-config --help                 # CLI usage
+
+    bundle exec solargraph scan                          # Type-index the workspace, report load errors
+    bundle exec solargraph typecheck lib/secret_config/registry.rb   # Type check one file
+    bundle exec solargraph stdio                         # Language server, for editor integration
+
+    rake gem                                             # Build the gem
+    rake publish                                         # Tag, push, and push the gem to rubygems (maintainer only)
+
+Tests are Minitest with the `describe`/`it` spec DSL nested inside `Minitest::Test` subclasses, run with
+`-w` (warnings on) via the Rake test task. CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs
+`bundle exec rake` on Ruby 3.2, 3.3, 3.4, and 4.0.
+
+SimpleCov runs on every test run and writes `coverage/index.html` (gitignored). Line and branch coverage
+are printed at the end of the run; the baseline is 83.86% line / 60.00% branch. No minimum threshold is
+enforced, so coverage cannot fail the build.
+
+Solargraph is configured by [.solargraph.yml](.solargraph.yml). It indexes `lib/` and `test/` and excludes
+the Jekyll docs. Its `rubocop` diagnostics reporter is deliberately disabled, since rubocop is configured
+but not bundled.
+
+There is a [.rubocop.yml](.rubocop.yml) but rubocop is not in the Gemfile, so it is not run in CI. Match the
+style it encodes: double-quoted strings, trailing dot position, table-aligned hashes and assignments,
+128-character lines.
+
+## Architecture
+
+### Load path
+
+`SecretConfig.use(provider, path:, **args)` (or the first call to any accessor, which lazily builds a default
+registry) creates a `Registry`. `Registry#refresh!` walks the provider, feeds every key/value pair through a
+`Parser`, and stores the result in a `Concurrent::Map`. Everything is read eagerly at startup, so runtime
+lookups are pure in-memory hash reads. `refresh!` re-reads the whole tree and drops keys that disappeared
+from the central store.
+
+    SecretConfig (singleton facade, forwards to registry)
+      └── Registry            flat Concurrent::Map cache, type conversion, env-var override, filtering
+            ├── Parser        absolute → relative keys, ${...} interpolation, __import__ expansion
+            │     └── SettingInterpolator < StringInterpolator
+            └── Providers::{File,Ssm} < Providers::Provider
+
+### Key model
+
+Providers yield **absolute** keys (`/test/my_application/mysql/host`). The `Parser` strips the registry's
+root `path` so the cache is keyed by **relative** keys (`mysql/host`). Public API takes relative keys;
+`Registry#expand_key` re-adds the root for writes. Anything starting with `/` is treated as absolute.
+
+`Utils` converts between the flat cache and the nested hash returned by `configuration`. When a node is both
+a value and a branch, its own value is stored under `NODE_KEY` (`"__value__"`) inside the branch hash.
+
+### Interpolation and imports
+
+Interpolation runs once, at load/refresh time, inside `Parser#parse`, so `${random}` and `${select:...}`
+produce new values on every process restart or `refresh!`, not on every read. `SettingInterpolator` methods
+(`date`, `time`, `env`, `hostname`, `pid`, `random`, `select`) are dispatched by name from
+`StringInterpolator#parse`; adding a public method to `SettingInterpolator` adds a new `${name:args}` token,
+so do not add public helper methods there casually. `$${...}` escapes interpolation.
+
+A key named `__import__` copies another subtree into its parent node. A relative import value is resolved
+against the already-parsed tree; an absolute one triggers a second provider fetch. Existing keys always win
+over imported ones, and imports cannot reference other imports.
+
+### Value handling
+
+All values are stored and returned as strings. `fetch` applies, in order: env-var override, `encoding:`
+(`:base64`), then `type:` (`:string`, `:integer`, `:float`, `:boolean`, `:symbol`, `:json`), with `separator:`
+splitting into an array of converted elements. Missing keys raise `MissingMandatoryKey` unless `default:` or
+a block is supplied.
+
+Environment variables override the central store when `SecretConfig.check_env_var?` is true (the default).
+The name is the relative key upcased with `/` replaced by `_`: `mysql/host` → `MYSQL_HOST`.
+
+`SecretConfig.filters` (default: regexes matching password/key/passphrase/secret/pwd) mask values as
+`[FILTERED]` in `configuration` output and CLI exports. Filtering applies only to those dumps, never to
+`[]`/`fetch`.
+
+### Environment variables that change startup behavior
+
+`SECRET_CONFIG_PATH` overrides the configured root path; `SECRET_CONFIG_PROVIDER` overrides the provider
+(defaults to `file`); `SECRET_CONFIG_KEY_ID` / `SECRET_CONFIG_KEY_ALIAS` select the KMS key for the SSM
+provider. Absent an explicit path, the registry falls back to `RAILS_ENV` then `Rails.env`.
+
+### CLI
+
+[lib/secret_config/cli.rb](lib/secret_config/cli.rb) is a self-contained `OptionParser` front end that talks
+to a provider directly rather than through the global registry, so it can operate on any path without
+`SECRET_CONFIG_PATH` being set. Note that `CLI#provider_instance` only builds `:ssm` and raises
+`ArgumentError` for anything else, even though `--provider`'s help text advertises `[ssm | file]`. Exports
+filter secrets by default (`--no-filter` to disable) and leave `${...}` uninterpolated unless `--interpolate`
+is passed, which keeps round-tripping an export back through `--import` non-destructive.
+
+### Adding a provider
+
+Subclass `Providers::Provider` and implement `each(path)` (yielding absolute key/value pairs), `set`,
+`delete`, and `fetch`. Register it in the `autoload` list in [lib/secret_config.rb](lib/secret_config.rb);
+`Utils.constantize_symbol` resolves `:my_provider` to `SecretConfig::Providers::MyProvider`. Optional
+backends require their gem inside a `begin/rescue LoadError` that re-raises with an install hint, as
+[providers/ssm.rb](lib/secret_config/providers/ssm.rb) does.
+
+## Tests
+
+Fixtures live in [test/config/application.yml](test/config/application.yml), which exercises interpolation,
+`__import__`, node-plus-branch values, and comma-separated lists. Registry tests build a
+`Providers::File` against that file with path `/test/my_application` or `/test/other_application`. SSM tests
+use `Minitest::Mock` against a stubbed `Aws::SSM::Client` and do not hit AWS.
+
+[test/test_helper.rb](test/test_helper.rb) requires `cgi/escape` before `amazing_print` on purpose: Ruby 4.0
+removed `cgi` from stdlib and the shim warns if loaded reentrantly. Keep that require first.

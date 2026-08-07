@@ -1,0 +1,31 @@
+---
+include:
+- Rakefile
+- Gemfile
+- "*.gemspec"
+- bin/*
+- lib/**/*.rb
+- test/**/*.rb
+exclude:
+- docs/**/*
+- vendor/**/*
+- coverage/**/*
+- ".bundle/**/*"
+require: []
+domains: []
+# The `rubocop` reporter is omitted deliberately: rubocop is configured in
+# .rubocop.yml but is not a bundled dependency, so the reporter cannot run.
+reporters:
+- require_not_found
+formatter:
+  rubocop:
+    cops: safe
+    except: []
+    only: []
+    extra_args: []
+type_checker:
+  rules: {}
+require_paths:
+- lib
+plugins: []
+max_files: 5000

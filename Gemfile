@@ -9,3 +9,5 @@ gem "minitest"
 gem "minitest-mock"
 gem "minitest-reporters"
 gem "rake"
+gem "simplecov", require: false
+gem "solargraph", require: false
