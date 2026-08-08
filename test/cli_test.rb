@@ -1,7 +1,9 @@
 require_relative "test_helper"
+require "tmpdir"
+require "fileutils"
 
-# Covers argument parsing only. The command implementations (`run_export`, `run_import`, `run_diff`, and
-# friends) drive stdin/stdout and the SSM provider, and are not exercised here.
+# Covers argument parsing, and the command implementations that the file provider makes reachable
+# without AWS credentials. `--console` and the SSM-specific paths are still not exercised here.
 class CLITest < Minitest::Test
   describe SecretConfig::CLI do
     describe "#initialize" do
@@ -188,16 +190,178 @@ class CLITest < Minitest::Test
       end
     end
 
-    # Current behavior, not desired behavior: --provider advertises "[ssm | file]" but only ssm builds.
-    # See TECH_DEBT.md.
     describe "#provider_instance" do
-      it "raises for any provider other than ssm" do
-        cli = SecretConfig::CLI.new(["--provider", "file", "--fetch", "mysql/host"])
+      it "builds the file provider" do
+        cli      = SecretConfig::CLI.new(["--provider", "file", "--provider-file", "test/config/application.yml"])
+        instance = cli.send(:provider_instance)
+
+        assert_instance_of SecretConfig::Providers::File, instance
+        assert_equal "test/config/application.yml", instance.file_name
+      end
+
+      it "falls back to the env var, then the default, for the file provider" do
+        original = ENV.fetch("SECRET_CONFIG_FILE_NAME", nil)
+
+        ENV["SECRET_CONFIG_FILE_NAME"] = "from_env.yml"
+        cli = SecretConfig::CLI.new(["--provider", "file"])
+
+        assert_equal "from_env.yml", cli.send(:provider_instance).file_name
+
+        ENV["SECRET_CONFIG_FILE_NAME"] = nil
+        cli = SecretConfig::CLI.new(["--provider", "file"])
+
+        assert_equal "config/application.yml", cli.send(:provider_instance).file_name
+      ensure
+        ENV["SECRET_CONFIG_FILE_NAME"] = original
+      end
+
+      it "raises for an unknown provider" do
+        cli = SecretConfig::CLI.new(["--provider", "vault", "--fetch", "mysql/host"])
 
         error = assert_raises ArgumentError do
           cli.send(:provider_instance)
         end
-        assert_equal "Invalid provider: file", error.message
+        assert_equal "Invalid provider: vault. Valid providers: ssm | file", error.message
+      end
+    end
+
+    # The commands below are only reachable without AWS credentials now that the file provider builds.
+    describe "commands against the file provider" do
+      let(:path) { "/test/my_application" }
+
+      def build_cli(argv, store)
+        SecretConfig::CLI.new(argv + ["--provider", "file", "--provider-file", store])
+      end
+
+      def with_store(&)
+        Dir.mktmpdir do |dir|
+          store = File.join(dir, "application.yml")
+          FileUtils.cp("test/config/application.yml", store)
+          yield store, dir
+        end
+      end
+
+      it "fetches one key" do
+        with_store do |store|
+          out, = capture_io { build_cli(["--fetch", "#{path}/mysql/host"], store).run! }
+
+          assert_equal "127.0.0.1\n", out
+        end
+      end
+
+      it "sets one key" do
+        with_store do |store|
+          capture_io { build_cli(["--set", "#{path}/mysql/host=localhost"], store).run! }
+
+          assert_equal "localhost", SecretConfig::Providers::File.new(file_name: store).fetch("#{path}/mysql/host")
+        end
+      end
+
+      it "deletes one key" do
+        with_store do |store|
+          capture_io { build_cli(["--delete", "#{path}/mysql/host"], store).run! }
+
+          assert_nil SecretConfig::Providers::File.new(file_name: store).fetch("#{path}/mysql/host")
+        end
+      end
+
+      it "deletes a tree" do
+        with_store do |store|
+          capture_io { build_cli(["--delete-tree", "#{path}/mysql"], store).run! }
+
+          provider = SecretConfig::Providers::File.new(file_name: store)
+
+          assert_nil provider.fetch("#{path}/mysql/host")
+          assert_nil provider.fetch("#{path}/mysql/database")
+          assert_equal "127.0.0.1:27017", provider.fetch("#{path}/mongo/primary")
+        end
+      end
+
+      it "exports to a file, filtering secrets by default" do
+        with_store do |store, dir|
+          target = File.join(dir, "exported.yml")
+          capture_io { build_cli(["--export", path, "--file", target], store).run! }
+
+          config = YAML.safe_load_file(target)
+
+          assert_equal "127.0.0.1", config.dig("mysql", "host")
+          assert_equal SecretConfig::FILTERED, config.dig("mysql", "password")
+        end
+      end
+
+      it "exports unfiltered with --no-filter" do
+        with_store do |store, dir|
+          target = File.join(dir, "exported.yml")
+          capture_io { build_cli(["--export", path, "--file", target, "--no-filter"], store).run! }
+
+          assert_equal "secret_configrules", YAML.safe_load_file(target).dig("mysql", "password")
+        end
+      end
+
+      it "imports from a file into a store that does not exist yet" do
+        with_store do |_store, dir|
+          source = File.join(dir, "source.yml")
+          File.write(source, {"mysql" => {"host" => "localhost"}}.to_yaml)
+          target = File.join(dir, "new", "store.yml")
+
+          capture_io { build_cli(["--import", path, "--file", source], target).run! }
+
+          assert_equal "localhost", SecretConfig::Providers::File.new(file_name: target).fetch("#{path}/mysql/host")
+        end
+      end
+
+      it "exports to stdout when no file is given" do
+        with_store do |store|
+          out, = capture_io { build_cli(["--export", path], store).run! }
+
+          assert_equal "127.0.0.1", YAML.safe_load(out).dig("mysql", "host")
+        end
+      end
+
+      it "exports json when the file name ends in .json" do
+        with_store do |store, dir|
+          target = File.join(dir, "exported.json")
+          capture_io { build_cli(["--export", path, "--file", target], store).run! }
+
+          assert_equal "127.0.0.1", JSON.parse(File.read(target)).dig("mysql", "host")
+        end
+      end
+
+      it "copies one path onto another inside the same file" do
+        with_store do |store|
+          capture_io { build_cli(["--import", "/copy/my_application", "--path", path], store).run! }
+
+          provider = SecretConfig::Providers::File.new(file_name: store)
+
+          assert_equal "127.0.0.1", provider.fetch("/copy/my_application/mysql/host")
+          assert_equal "secret_configrules", provider.fetch("/copy/my_application/mysql/password")
+        end
+      end
+
+      it "diffs two paths inside the same file" do
+        with_store do |store|
+          capture_io { build_cli(["--import", "/copy/my_application", "--path", path], store).run! }
+          capture_io { build_cli(["--set", "/copy/my_application/mysql/host=localhost"], store).run! }
+
+          out, = capture_io { build_cli(["--diff", path, "--path", "/copy/my_application"], store).run! }
+
+          assert_includes out, "mysql/host"
+          assert_includes out, "- 127.0.0.1"
+          assert_includes out, "+ localhost"
+        end
+      end
+
+      it "diffs a file against the store" do
+        with_store do |store, dir|
+          source = File.join(dir, "source.yml")
+          File.write(source, {"mysql" => {"host" => "localhost"}}.to_yaml)
+
+          out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+          assert_includes out, "mysql/host"
+          assert_includes out, "- 127.0.0.1"
+          assert_includes out, "+ localhost"
+        end
       end
     end
 

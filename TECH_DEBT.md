@@ -47,19 +47,7 @@ The relative equivalent raises `ConfigurationError` with the cycle in the messag
 very differently. Fixing it means threading the set of absolute paths already being fetched through
 `Registry#fetch_path` into the `Parser` it creates, and raising when a path recurs.
 
-### 3. `--provider file` is advertised but not built
-
-`CLI#provider_instance` only builds `:ssm` and raises `ArgumentError` for anything else, even though
-`--provider`'s help text advertises `[ssm | file]`:
-
-    secret-config --provider file --fetch mysql/host
-    => ArgumentError: Invalid provider: file
-
-Either build the file provider or stop advertising it. Building it is the more useful of the two, since it
-would let the CLI diff and export a local `application.yml` without AWS credentials. Asserted as current
-behavior by the `#provider_instance` test in [test/cli_test.rb](test/cli_test.rb).
-
-### 4. `fetch` consults a block only when a default is also supplied
+### 3. `fetch` consults a block only when a default is also supplied
 
 The missing-key check runs before the block, so a block on its own does not satisfy a missing key:
 
@@ -72,15 +60,17 @@ Changing this is **[breaking]** for anyone relying on the current raise. Asserte
 
 ## Design questions
 
-### 5. `cli.rb` is excluded from the `Metrics/*` cops
+### 4. `cli.rb` is excluded from the `Metrics/*` cops
 
 `Metrics/AbcSize`, `ClassLength`, `CyclomaticComplexity`, `MethodLength`, and `BlockLength` all exclude
-`cli.rb` in [.rubocop.yml](.rubocop.yml). Against the default config it is 509 lines with a class body of
-386, `run!` has a cyclomatic complexity of 16, and `parser` is an 87 line method.
+`cli.rb` in [.rubocop.yml](.rubocop.yml). Against the default config it is 526 lines with a class body of
+396, `run!` has a cyclomatic complexity of 16, and `parser` is a 92 line method.
 
-The exclusions are there because the command implementations have no test coverage, so a refactor cannot
-be verified. `#set_config` is now covered, the rest are not. Cover them first, then split the class and
-remove the exclusions.
+The exclusions are there because the command implementations had no test coverage, so a refactor could not
+be verified. Building the file provider into the CLI removed that blocker: `cli.rb` is now at 92.0%, since
+every command except `--console` can be driven against a local file without AWS credentials. Splitting the
+class and removing the exclusions is now safe to do. What remains uncovered is `--console`, the SSM
+branches of `#provider_instance`, and the stdin/stdout ends of `read_file` and `write_file`.
 
 ## Not tracked here
 

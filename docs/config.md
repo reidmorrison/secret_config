@@ -108,6 +108,7 @@ Priority describes when an environment variable is used as a default value, prec
  `SECRET_CONFIG_PROVIDER`  | override the provider configured for `config.secret_config.use` | override
  `SECRET_CONFIG_KEY_ID`    | encryption `key_id`                                             | default
  `SECRET_CONFIG_KEY_ALIAS` | encryption `key_alias`                                          | default
+ `SECRET_CONFIG_FILE_NAME` | file the `file` provider reads and writes                       | default
 
 ### Shared configuration for development and test
 

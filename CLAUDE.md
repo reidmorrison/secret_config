@@ -70,12 +70,12 @@ enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set delibe
 uncovered, which inflates the total. (`cover` replaced the equivalent `track_files`, which SimpleCov now
 deprecates. The reported totals were identical either way.)
 
-The baseline is 80.20% line / 66.12% branch. Every file is at 100% except `cli.rb` (54.3%, argument
-parsing and `#set_config` are covered but the remaining command implementations are not),
-`providers/file.rb` (96.2%, the uncovered line is a Psych 3 fallback), and `providers/ssm.rb` (97.3%, the
-uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`). `railtie.rb` and `version.rb` report
-0% for structural reasons: the railtie is only loaded under Rails, and the gemspec loads `version.rb`
-before SimpleCov starts.
+The baseline is 95.95% line / 85.39% branch. Every file is at 100% except `cli.rb` (92.0%, the uncovered
+parts are `--console`, the SSM branches of `#provider_instance`, and the stdin/stdout ends of `read_file`
+and `write_file`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback), and
+`providers/ssm.rb` (97.3%, the uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`).
+`railtie.rb` and `version.rb` report 0% for structural reasons: the railtie is only loaded under Rails, and
+the gemspec loads `version.rb` before SimpleCov starts.
 
 Measure the baseline with a cleared `coverage/` directory. SimpleCov merges resultsets from separate
 suites within a timeout window, so a stray `ruby -Itest` run leaves stale data behind that skews the next
@@ -94,8 +94,8 @@ deliberate and documented in place:
 
 - `Naming/PredicateMethod` is disabled inline on `Registry#refresh!`, which returns `true` but cannot be
   renamed because it is public API delegated from `SecretConfig.refresh!`.
-- The `Metrics/*` cops exclude `cli.rb`. Apart from `#set_config`, its command implementations have no
-  test coverage, so refactoring for the metrics is not safe yet. See [TECH_DEBT.md](TECH_DEBT.md).
+- The `Metrics/*` cops exclude `cli.rb`. The exclusions predate its test coverage and are now removable;
+  splitting the class is the outstanding work. See [TECH_DEBT.md](TECH_DEBT.md).
 
 ## Architecture
 
@@ -151,17 +151,24 @@ The name is the relative key upcased with `/` replaced by `_`: `mysql/host` → 
 ### Environment variables that change startup behavior
 
 `SECRET_CONFIG_PATH` overrides the configured root path; `SECRET_CONFIG_PROVIDER` overrides the provider
-(defaults to `file`); `SECRET_CONFIG_KEY_ID` / `SECRET_CONFIG_KEY_ALIAS` select the KMS key for the SSM
-provider. Absent an explicit path, the registry falls back to `RAILS_ENV` then `Rails.env`.
+(defaults to `file`); `SECRET_CONFIG_FILE_NAME` sets the file the `file` provider reads and writes
+(defaults to `config/application.yml`, and an explicit `file_name:` wins); `SECRET_CONFIG_KEY_ID` /
+`SECRET_CONFIG_KEY_ALIAS` select the KMS key for the SSM provider. Absent an explicit path, the registry
+falls back to `RAILS_ENV` then `Rails.env`.
 
 ### CLI
 
 [lib/secret_config/cli.rb](lib/secret_config/cli.rb) is a self-contained `OptionParser` front end that talks
 to a provider directly rather than through the global registry, so it can operate on any path without
-`SECRET_CONFIG_PATH` being set. Note that `CLI#provider_instance` only builds `:ssm` and raises
-`ArgumentError` for anything else, even though `--provider`'s help text advertises `[ssm | file]`. Exports
-filter secrets by default (`--no-filter` to disable) and leave `${...}` uninterpolated unless `--interpolate`
-is passed, which keeps round-tripping an export back through `--import` non-destructive.
+`SECRET_CONFIG_PATH` being set. `CLI#provider_instance` builds `:ssm` and `:file`, and raises
+`ArgumentError` for anything else. Exports filter secrets by default (`--no-filter` to disable) and leave
+`${...}` uninterpolated unless `--interpolate` is passed, which keeps round-tripping an export back through
+`--import` non-destructive.
+
+Two file options that are easily confused: `--file` is what `--export`/`--import`/`--diff` transfer to or
+from, while `--provider-file` is the store that `--provider file` reads and writes. `--provider file` makes
+every command except `--console` runnable without AWS credentials, which is what most of the CLI test
+coverage now relies on.
 
 ### Adding a provider
 
@@ -177,8 +184,10 @@ Fixtures live in [test/config/application.yml](test/config/application.yml), whi
 `__import__`, node-plus-branch values, and comma-separated lists. Registry tests build a
 `Providers::File` against that file with path `/test/my_application` or `/test/other_application`.
 
-`InMemoryProvider` in [test/test_helper.rb](test/test_helper.rb) is a writable provider for exercising
-`set` and `delete`, which the file provider does not implement.
+`InMemoryProvider` in [test/test_helper.rb](test/test_helper.rb) is a writable provider that keeps the flat
+key/value hash in memory, which is convenient when a test wants to assert on exactly what was written.
+`Providers::File` is also writable now, so tests that need a real round trip copy the fixture into a
+`Dir.mktmpdir` and point `--provider-file` at the copy rather than mutating `test/config/application.yml`.
 
 There are two SSM test files. [test/providers/ssm_stubbed_test.rb](test/providers/ssm_stubbed_test.rb)
 passes `stub_responses: true` and `region:` through `Ssm#initialize` into `Aws::SSM::Client`, so it never
@@ -186,8 +195,7 @@ touches AWS and runs everywhere; use it for new SSM coverage.
 [test/providers/ssm_test.rb](test/providers/ssm_test.rb) does a live round trip and skips unless
 `AWS_ACCESS_KEY_ID` is set, which is the source of the suite's 2 skips.
 
-Some tests deliberately assert current, undesired behavior (the `--provider file` rejection in
-[test/cli_test.rb](test/cli_test.rb), the `fetch` block precedence in
+Some tests deliberately assert current, undesired behavior (the `fetch` block precedence in
 [test/registry_test.rb](test/registry_test.rb)). They carry a comment pointing at
 [TECH_DEBT.md](TECH_DEBT.md); update them when fixing the underlying issue rather than treating a failure
 there as a regression.
