@@ -128,7 +128,8 @@ module SecretConfig
           @import = path
         end
 
-        opts.on "-f", "--file FILE_NAME", "Import/Export/Diff to/from this file." do |file_name|
+        # No short option: "-f" belongs to --fetch below.
+        opts.on "--file FILE_NAME", "Import/Export/Diff to/from this file." do |file_name|
           @file_name = file_name
         end
 
@@ -143,8 +144,10 @@ module SecretConfig
         end
 
         opts.on "-s", "--set KEY=VALUE", "Set one key to value. Example: --set mysql/database=localhost" do |param|
-          @set_key, @set_value = param.split("=")
-          unless @set_key && @set_value
+          # Split on the first "=" only, so that values containing "=" are preserved.
+          # For example base64 encoded encryption keys, which are padded with "=".
+          @set_key, @set_value = param.split("=", 2)
+          if @set_key.to_s.empty? || @set_value.to_s.empty?
             raise(ArgumentError, "Supply key and value separated by '='. Example: --set mysql/database=localhost")
           end
         end

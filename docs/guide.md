@@ -167,3 +167,71 @@ This avoids a custom config file just for the above library.
 Additionally the values can be overridden with environment variables at any time:
 
     export HTTP_CLIENT_URL=https://production.example.com
+
+## Sharing settings with `__import__`
+
+A key named `__import__` copies the settings under another path into its parent node. It is useful when
+several nodes share most of their settings and differ in only a few.
+
+~~~yaml
+test:
+  my_application:
+    mongo:
+      database:   secret_config_test
+      primary:    127.0.0.1:27017
+      secondary:  127.0.0.1:27018
+
+    mongo_reporting:
+      __import__: mongo
+      primary:    reporting.example.net:27017
+~~~
+
+`mongo_reporting` ends up with `database` and `secondary` copied from `mongo`, and keeps its own
+`primary`. The `__import__` key itself is removed and never appears in the registry.
+
+Notes on how imports resolve:
+
+* A relative value, such as `mongo` above, is resolved against the root path of the registry, not
+  against the node doing the importing.
+* An absolute value, such as `/test/my_application/mongo`, is read from the provider directly. This
+  allows one application to import settings from a path outside of its own root.
+    * Each absolute import is a separate call to the provider, so they are more expensive than
+      relative ones.
+* A key that already exists always wins over an imported one, which is what makes the override above
+  work.
+* A path that itself contains an `__import__` can be imported. It is resolved first, so the settings it
+  brings in are imported too, no matter which of the two nodes is declared first.
+* Imports must not form a cycle. Two nodes that import each other, or a node that imports itself, raise
+  `SecretConfig::ConfigurationError`.
+* Imports are only applied when interpolation is enabled, which is the default. The CLI leaves them
+  in place on export unless `--interpolate` is supplied, which keeps an export re-importable.
+
+## When a setting is both a value and a branch
+
+A node can have a value of its own and still have children under it. In AWS SSM Parameter Store this
+happens whenever both `/production/my_application/logger` and `/production/my_application/logger/level`
+exist as parameters.
+
+YAML cannot express that directly, so Secret Config uses the reserved key `__value__` for the value that
+belongs to the node itself:
+
+~~~yaml
+test:
+  my_application:
+    logger:
+      __value__: info
+      level:     debug
+~~~
+
+Read it as the node, not as `__value__`:
+
+~~~ruby
+SecretConfig.fetch("logger")
+# => "info"
+
+SecretConfig.fetch("logger/level")
+# => "debug"
+~~~
+
+`SecretConfig.configuration` and the CLI's `--export` render such nodes back out with `__value__`, so an
+export can be edited and imported again without losing the node's own value.

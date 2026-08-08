@@ -111,9 +111,25 @@ Import configuration from an existing path in AWS SSM Parameter Store into anoth
 #### Generating random passwords
 
 In the multi-tenant example above, we may want to generate a secure random password for each tenant.
-In the source file or registry, set the value to `$random`, this will ensure that during the `import`
+In the source file or registry, set the value to `$(random)`, this will ensure that during the `import`
 that the destination will receive a secure random value.
+
+The value must be exactly `$(random)`, ignoring any surrounding spaces. Any other spelling is imported
+as a literal string.
 
 By default the length of the randomized value is 32 bytes, use `--random_size` to adjust the length of
 the randomized string.
+
+#### `$(random)` is not `${random}`
+
+These look alike and behave very differently. Note the parentheses versus the braces:
+
+* `$(random)` is materialized once, by the CLI, during an `--import`. The generated value is written to
+  the registry and stays there. Existing values are left alone, so re-running the import does not
+  replace a password that was already generated.
+* `${random}` is a [string interpolation](interpolation). It is evaluated by the application every time
+  the registry is loaded or refreshed, so it produces a different value on every restart.
+
+Use `$(random)` for anything that has to stay the same after it is generated, such as a database
+password. `${random}` is only suitable for values that are genuinely disposable within a single process.
 

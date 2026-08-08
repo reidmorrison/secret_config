@@ -15,6 +15,28 @@ class SecretConfigTest < Minitest::Test
       SecretConfig.use :file, path: path, file_name: file_name
     end
 
+    describe ".use" do
+      it "interpolates by default" do
+        SecretConfig.use :file, path: path, file_name: file_name
+
+        assert_equal "#{Socket.gethostname}:27018", SecretConfig["mongo/secondary"]
+      end
+
+      it "leaves interpolation untouched when disabled" do
+        SecretConfig.use :file, path: path, file_name: file_name, interpolate: false
+
+        assert_equal "${hostname}:27018", SecretConfig["mongo/secondary"]
+      end
+
+      it "passes the remaining arguments to the provider" do
+        error = assert_raises SecretConfig::ConfigurationError do
+          SecretConfig.use :file, path: path, file_name: "does/not/exist.yml"
+        end
+
+        assert_includes error.message, "does/not/exist.yml"
+      end
+    end
+
     describe ".configuration" do
       it "returns a copy of the config" do
         assert_equal "127.0.0.1", SecretConfig.configuration.dig("mysql", "host")

@@ -16,7 +16,7 @@ Gem::Specification.new do |s|
                             "supporting multiple tenants of the same application. Settings are read " \
                             "from AWS System Manager Parameter Store, or a local file during " \
                             "development and test, and can be overridden with environment variables."
-  s.files                 = Dir["lib/**/*", "bin/*", "LICENSE", "Rakefile", "README.md"]
+  s.files                 = Dir["lib/**/*", "bin/*", "LICENSE", "Rakefile", "README.md", "CHANGELOG.md"]
   s.license               = "Apache-2.0"
   s.required_ruby_version = ">= 3.2"
   s.bindir                = "bin"
@@ -24,6 +24,7 @@ Gem::Specification.new do |s|
   s.add_dependency "concurrent-ruby", "~> 1.0"
   s.metadata = {
     "bug_tracker_uri"       => "https://github.com/reidmorrison/secret_config/issues",
+    "changelog_uri"         => "https://github.com/reidmorrison/secret_config/blob/v#{SecretConfig::VERSION}/CHANGELOG.md",
     "documentation_uri"     => "https://config.reidmorrison.com",
     "source_code_uri"       => "https://github.com/reidmorrison/secret_config/tree/v#{SecretConfig::VERSION}",
     "rubygems_mfa_required" => "true"

@@ -19,37 +19,8 @@ class ParserTest < Minitest::Test
       SecretConfig::Registry.new(path: path, provider: provider)
     end
 
-    # let :parser do
-    #   SecretConfig::Parser.new(path, registry)
-    # end
-
-    #
-    # Retrieve values elsewhere in the registry.
-    # Paths can be relative to the current root, or absolute paths outside the current root.
-    #   ${fetch:key}      # Fetches a single value from a relative or absolute path
-    # Return the value of the supplied key.
-    #
-    # With a relative key, look for the value in the current registry.
-    # With an absolute key call the provider and fetch the value directly.
-    #
-    # Notes:
-    # - A lot of absolute key lookups can be expensive since each one is a separate call.
-    # def fetch(key)
-    #   fetch_list[key] = key
-    # end
-    # describe "#fetch" do
-    #   it "inside current path" do
-    #
-    #   end
-    #
-    #   it "outside current path" do
-    #
-    #   end
-    # end
-
-    #   ${import:path}    # Imports a path of keys and values into the current path
-    # Replace the current value with a tree of values with the supplied path.
-    #
+    # `__import__` replaces its own key with a tree of values read from the supplied path.
+    # The path can be relative to the current root, or an absolute path outside the current root.
     describe "#import" do
       it "removes import key" do
         refute registry.key?("symmetric_encryption/__import__"), -> { registry.configuration(filters: nil).ai }
@@ -76,6 +47,54 @@ class ParserTest < Minitest::Test
       it "relative import with overrides" do
         assert_equal "secret_config_test2", registry["mongo2/database"]
         assert_equal "localhost:27017", registry["mongo3/primary"]
+      end
+    end
+
+    describe "#import resolution order" do
+      let :file_name do
+        File.join(File.dirname(__FILE__), "config", "imports.yml")
+      end
+
+      def registry_for(path)
+        SecretConfig::Registry.new(path: path, provider: provider)
+      end
+
+      it "resolves an import of a node that is imported itself" do
+        registry = registry_for("/test/forward")
+
+        assert_equal "base.example.net", registry["mid/host"], -> { registry.configuration(filters: nil).ai }
+        assert_equal "base.example.net", registry["top/host"]
+      end
+
+      it "retains overrides through a chain of imports" do
+        registry = registry_for("/test/forward")
+
+        assert_equal "5432", registry["mid/port"], -> { registry.configuration(filters: nil).ai }
+        assert_equal "5432", registry["top/port"]
+      end
+
+      it "leaves no import key behind" do
+        registry = registry_for("/test/forward")
+
+        keys = SecretConfig::Utils.flatten(registry.configuration(filters: nil)).keys
+
+        assert_empty keys.grep(/__import__/), -> { keys.ai }
+      end
+
+      it "raises for a circular import" do
+        error = assert_raises SecretConfig::ConfigurationError do
+          registry_for("/test/circular")
+        end
+
+        assert_includes error.message, "Circular __import__ in /test/circular"
+      end
+
+      it "raises for a node that imports itself" do
+        error = assert_raises SecretConfig::ConfigurationError do
+          registry_for("/test/self_referencing")
+        end
+
+        assert_includes error.message, "node/__import__"
       end
     end
   end

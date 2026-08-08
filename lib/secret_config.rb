@@ -7,9 +7,11 @@ require "secret_config/railtie" if defined?(Rails)
 # Centralized Configuration and Secrets Management for Ruby and Rails applications.
 module SecretConfig
   # When a node is both a value and a hash/branch in the tree, put its value in its hash with the following key:
-  NODE_KEY = "__value__".freeze
-  FILTERED = "[FILTERED]".freeze
-  RANDOM   = "$(random)".freeze
+  NODE_KEY   = "__value__".freeze
+  # A node with the following key imports the settings under the path it refers to into its parent node.
+  IMPORT_KEY = "__import__".freeze
+  FILTERED   = "[FILTERED]".freeze
+  RANDOM     = "$(random)".freeze
 
   module Providers
     autoload :File, "secret_config/providers/file"
@@ -38,9 +40,24 @@ module SecretConfig
   end
 
   # Which provider to use along with any arguments
-  # The path will be overriden by env var `SECRET_CONFIG_PATH` if present.
-  def self.use(provider, path: nil, **args)
-    @registry = SecretConfig::Registry.new(path: path, provider: provider, provider_args: args)
+  #
+  # Parameters:
+  #   path: [String]
+  #     The root path to read the configuration from.
+  #     Overriden by env var `SECRET_CONFIG_PATH` if present.
+  #
+  #   interpolate: [true|false]
+  #     Whether to evaluate `${...}` interpolations and `__import__` when reading the configuration.
+  #     Default: true
+  #
+  # Any remaining arguments are passed to the provider when it is instantiated.
+  def self.use(provider, path: nil, interpolate: true, **args)
+    @registry = SecretConfig::Registry.new(
+      path:          path,
+      provider:      provider,
+      provider_args: args,
+      interpolate:   interpolate
+    )
   end
 
   # Fetch configuration in a block by supplying the root path once.

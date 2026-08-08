@@ -5,8 +5,6 @@ module SecretConfig
     def initialize(path, registry, interpolate: true)
       @path         = path
       @registry     = registry
-      @fetch_list   = {}
-      @import_list  = {}
       @tree         = {}
       @interpolator = interpolate ? SettingInterpolator.new : nil
     end
@@ -27,44 +25,72 @@ module SecretConfig
 
     private
 
-    # def apply_fetches
-    #   tree[key] = relative_key?(fetch_key) ? registry[fetch_key] : registry.provider.fetch(fetch_key)
-    # end
-
     # Import from the current registry as well as new fetches.
     #
     # Notes:
     # - A lot of absolute key lookups can be expensive since each one is a separate call.
-    # - Imports cannot reference other imports at this time.
     def apply_imports
-      tree.keys.each do |key|
-        next unless (key =~ %r{/__import__\Z}) || (key == "__import__")
+      # Collect the keys up front, since applying an import adds to and deletes from the tree.
+      import_keys = tree.keys.select { |key| import_key?(key) }
+      import_keys.each { |key| apply_import(key, []) }
+    end
 
-        import_key = tree.delete(key)
-        key, = ::File.split(key)
-        key = nil if key == "."
+    # Replaces the supplied import key with the settings under the path it refers to.
+    #
+    # `chain` holds the import keys currently being resolved, so that a circular reference raises
+    # instead of recursing forever.
+    def apply_import(key, chain)
+      # Already resolved, as a dependency of an import that was applied before this one.
+      return unless tree.key?(key)
 
-        # binding.irb
-
-        # With a relative key, look for the values in the current registry.
-        # With an absolute key call the provider and fetch the value directly.
-
-        if relative_key?(import_key)
-          tree.keys.each do |current_key|
-            match = current_key.match(%r{\A#{import_key}/(.*)})
-            next unless match
-
-            imported_key       = key.nil? ? match[1] : ::File.join(key, match[1])
-            tree[imported_key] = tree[current_key] unless tree.key?(imported_key)
-          end
-        else
-          relative_paths = registry.send(:fetch_path, import_key)
-          relative_paths.each_pair do |relative_key, value|
-            imported_key       = key.nil? ? relative_key : ::File.join(key, relative_key)
-            tree[imported_key] = value unless tree.key?(imported_key)
-          end
-        end
+      if chain.include?(key)
+        raise(ConfigurationError,
+              "Circular #{IMPORT_KEY} in #{path}: #{(chain + [key]).join(' -> ')}")
       end
+
+      source_path = tree[key]
+
+      # With a relative path, look for the values in the current registry.
+      # With an absolute path call the provider and fetch the values directly.
+      values =
+        if relative_key?(source_path)
+          apply_nested_imports(source_path, chain + [key])
+          relative_values(source_path)
+        else
+          registry.send(:fetch_path, source_path)
+        end
+
+      tree.delete(key)
+      target_path = ::File.split(key).first
+      target_path = nil if target_path == "."
+
+      values.each_pair do |relative_key, value|
+        imported_key       = target_path.nil? ? relative_key : ::File.join(target_path, relative_key)
+        tree[imported_key] = value unless tree.key?(imported_key)
+      end
+    end
+
+    # Resolves any imports inside the subtree that is about to be imported, so that the values they
+    # bring in are imported too, regardless of the order in which the keys were read.
+    def apply_nested_imports(source_path, chain)
+      prefix      = "#{source_path}/"
+      nested_keys = tree.keys.select { |key| import_key?(key) && key.start_with?(prefix) }
+      nested_keys.each { |key| apply_import(key, chain) }
+    end
+
+    # Returns [Hash] the values under the supplied path, with keys relative to that path.
+    def relative_values(source_path)
+      prefix = "#{source_path}/"
+      values = {}
+      tree.each_pair do |key, value|
+        values[key.delete_prefix(prefix)] = value if key.start_with?(prefix)
+      end
+      values
+    end
+
+    # Returns [true|false] whether the supplied key imports another path into its parent node.
+    def import_key?(key)
+      (key == IMPORT_KEY) || key.end_with?("/#{IMPORT_KEY}")
     end
 
     # Returns [true|false] whether the supplied key is considered a relative key.
