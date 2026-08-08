@@ -199,9 +199,10 @@ Notes on how imports resolve:
       relative ones.
 * A key that already exists always wins over an imported one, which is what makes the override above
   work.
-* Do not import a path that itself contains an `__import__`. Imports are resolved one at a time in the
-  order the keys are read, so importing a node whose own import has not been resolved yet copies its
-  unresolved `__import__` key across instead of the settings it refers to.
+* A path that itself contains an `__import__` can be imported. It is resolved first, so the settings it
+  brings in are imported too, no matter which of the two nodes is declared first.
+* Imports must not form a cycle. Two nodes that import each other, or a node that imports itself, raise
+  `SecretConfig::ConfigurationError`.
 * Imports are only applied when interpolation is enabled, which is the default. The CLI leaves them
   in place on export unless `--interpolate` is supplied, which keeps an export re-importable.
 

@@ -1,0 +1,23 @@
+# Fixtures for `__import__` resolution order.
+# Each root is read on its own, so the invalid roots below do not affect the valid ones.
+test:
+  # `top` imports `mid`, which imports `base`, and both are declared after the node importing them.
+  forward:
+    top:
+      __import__: mid
+    mid:
+      __import__: base
+      port:       5432
+    base:
+      host: base.example.net
+      port: 3306
+
+  circular:
+    first:
+      __import__: second
+    second:
+      __import__: first
+
+  self_referencing:
+    node:
+      __import__: node

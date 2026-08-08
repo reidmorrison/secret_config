@@ -182,10 +182,10 @@ sibling gems.
 Resolved by adding [CHANGELOG.md](CHANGELOG.md), reconstructed from the git history and the released gem
 versions, with an Unreleased section for the v2 work. `changelog_uri` now points at it.
 
-### 17. A forward `__import__` reference leaks an unresolved `__import__` key
+### 17. A forward `__import__` reference leaks an unresolved `__import__` key — RESOLVED
 
-Found while documenting item 11. `Parser#apply_imports` walks the keys once, in read order, so an import
-of a node whose own `__import__` has not been resolved yet copies the literal `__import__` key across
+Found while documenting item 11. `Parser#apply_imports` walked the keys once, in read order, so an import
+of a node whose own `__import__` had not been resolved yet copied the literal `__import__` key across
 instead of the settings behind it:
 
 ~~~yaml
@@ -198,13 +198,37 @@ later:
     early  => {"__import__" => "base"}    # no settings imported, and a reserved key left in the registry
     later  => {"host" => ..., "port" => ...}
 
-Reversing the order of the two nodes resolves both correctly, so the outcome depends on the order the
-provider yields keys in. Two separate problems: chained imports are order-dependent, and the failure mode
-leaves a reserved `__import__` key visible in the registry rather than raising.
+Reversing the order of the two nodes resolved both correctly, so the outcome depended on the order the
+provider yielded keys in.
 
-The code comment in `apply_imports` already notes "imports cannot reference other imports at this time",
-so the ordering limit is known. At minimum the leaked key should be dropped, or the case detected and
-raised on. [docs/guide.md](docs/guide.md) currently tells users not to chain imports.
+Resolved by having `apply_import` resolve the imports inside the subtree it is about to copy before
+copying it, so chained imports work in any order. A cycle would otherwise recurse forever, so the import
+keys being resolved are tracked and a circular reference raises `ConfigurationError`. This removes the
+"imports cannot reference other imports at this time" limitation the code comment noted.
+
+Note that this covers relative imports. See item 18 for the absolute case.
+
+### 18. Mutually recursive absolute imports overflow the stack
+
+Pre-existing, found while fixing item 17. An absolute `__import__` is resolved by
+`Registry#fetch_path`, which builds a fresh `Parser`, so the cycle tracking added in item 17 does not
+cross that boundary:
+
+~~~yaml
+test:
+  a:
+    node:
+      __import__: /test/b/node
+  b:
+    node:
+      __import__: /test/a/node
+~~~
+
+    Registry.new(path: "/test/a", ...) => SystemStackError
+
+The relative equivalent now raises `ConfigurationError` with the cycle in the message, so the two cases
+report very differently. Fixing it means threading the set of absolute paths already being fetched
+through `Registry#fetch_path` into the `Parser` it creates, and raising when a path recurs.
 
 ## Not tracked here
 

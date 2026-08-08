@@ -49,5 +49,53 @@ class ParserTest < Minitest::Test
         assert_equal "localhost:27017", registry["mongo3/primary"]
       end
     end
+
+    describe "#import resolution order" do
+      let :file_name do
+        File.join(File.dirname(__FILE__), "config", "imports.yml")
+      end
+
+      def registry_for(path)
+        SecretConfig::Registry.new(path: path, provider: provider)
+      end
+
+      it "resolves an import of a node that is imported itself" do
+        registry = registry_for("/test/forward")
+
+        assert_equal "base.example.net", registry["mid/host"], -> { registry.configuration(filters: nil).ai }
+        assert_equal "base.example.net", registry["top/host"]
+      end
+
+      it "retains overrides through a chain of imports" do
+        registry = registry_for("/test/forward")
+
+        assert_equal "5432", registry["mid/port"], -> { registry.configuration(filters: nil).ai }
+        assert_equal "5432", registry["top/port"]
+      end
+
+      it "leaves no import key behind" do
+        registry = registry_for("/test/forward")
+
+        keys = SecretConfig::Utils.flatten(registry.configuration(filters: nil)).keys
+
+        assert_empty keys.grep(/__import__/), -> { keys.ai }
+      end
+
+      it "raises for a circular import" do
+        error = assert_raises SecretConfig::ConfigurationError do
+          registry_for("/test/circular")
+        end
+
+        assert_includes error.message, "Circular __import__ in /test/circular"
+      end
+
+      it "raises for a node that imports itself" do
+        error = assert_raises SecretConfig::ConfigurationError do
+          registry_for("/test/self_referencing")
+        end
+
+        assert_includes error.message, "node/__import__"
+      end
+    end
   end
 end

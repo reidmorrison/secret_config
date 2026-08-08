@@ -29,6 +29,10 @@ Targeted at v2, since it carries breaking changes.
   OptionParser gave `-f` to `--fetch`, so no working invocation changes meaning.
 - `Providers::File#fetch` and the "path not found" error in `Providers::File#each` raised `NameError`
   instead of doing their job.
+- An `__import__` of a node that is itself an import now resolves regardless of the order the two
+  nodes are declared in. Previously the unresolved `__import__` key was copied across instead of the
+  settings behind it, leaving a reserved key visible in the registry. Circular imports raise
+  `SecretConfig::ConfigurationError` rather than recursing.
 
 ### Changed
 
