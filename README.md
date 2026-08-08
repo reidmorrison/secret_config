@@ -8,21 +8,15 @@ Securely store configuration information centrally, supporting multiple tenants 
 ## Documentation
 
 * [Secret Config](https://config.reidmorrison.com/)
+    * [Getting Started](https://config.reidmorrison.com/guide.html)
+    * [Guide](https://config.reidmorrison.com/api.html)
+    * [Command Line](https://config.reidmorrison.com/cli.html)
+    * [Rails](https://config.reidmorrison.com/rails.html)
 
-## v0.10 Upgrade Notes
+## Upgrading
 
-String interpolation has been changed to use `$` instead of `%`. Please change
-all interpolated strings to use `$` before upgrading.
-
-Example: `%{date}` needs to be changed to `${date}`
-
-## v0.9 Upgrade Notes
-
-Note that the command line program name has changed from `secret_config` to `secret-config`. 
-Be careful that the arguments have also changed. The arguments are now consistent across operations.
-The command line examples below have also been updated to reflect the changes. 
- 
-Please run `secret-config --help` to see the new arguments and updated operations.  
+See [Upgrading](https://config.reidmorrison.com/upgrading.html) for the breaking changes in each major
+release, and [CHANGELOG.md](CHANGELOG.md) for the complete record.
 
 ## Versioning
 

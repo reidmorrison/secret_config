@@ -2,97 +2,154 @@
 layout: default
 ---
 
-# Secret Config
+## What is Secret Config?
+{:.no_toc}
 
-Securely store and share secrets and configuration settings centrally.
+**Contents**
 
-Examples of some of the many values that can be securely managed by Secret Config:
-* Database usernames
-* Passwords
-* Connection pool sizes
-* Hostnames
-* Connection timeouts
-* Encryption keys and certificates
+* TOC
+{:toc}
 
-## Features
+Secret Config is centralized configuration and secrets management for Ruby and Rails applications.
 
-Supports storing configuration information in:
-* File
-    * For development and testing use.
-* Environment Variables
-    * Environment Variables take precedence and can be used to override any setting.
-* AWS System Manager Parameter Store
-    * Encrypt and securely store secrets such as passwords centrally.
+It reads a tree of settings from one place, a local YAML file in development or AWS SSM Parameter Store
+in production, into memory when the application starts, and serves them through a global `SecretConfig`
+singleton:
 
-Since all values are stored as strings in the central directory or config file, 
-the following type conversions are supported:
-* `integer`
-* `float`
-* `string`
-* `boolean`
-* `symbol`
-* `json`
+~~~ruby
+SecretConfig.fetch("mysql/host")
+# => "db.example.net"
 
-Arrays are not a type. To read a single value as an array, supply a `separator` to split it on, which
-can be combined with any of the types above. See the [API](api).
+SecretConfig.fetch("mysql/pool_size", type: :integer, default: 5)
+# => 25
+~~~
 
-Supported conversions:
-* `base64`
+Everything is read once at startup, so every lookup after that is an in-memory hash read. There is no
+network call on the path that reads a setting.
 
-## Benefits
+## Why use it?
 
-Benefits of moving sensitive configuration information into AWS System Manager Parameter Store:
+### The problem with configuration files
 
-  * Supports a hierarchical key structure.
-  * Supports thousands of individual settings in a single application.
-  * Securely stores sensitive settings or encryption keys in encrypted form in the AWS SSM Parameter Store.   
-  * To meet PCI Compliance the KMS encryption key can be transparently rotated without impacting secured values.  
-  * Removes security concerns with placing passwords or encryption keys in the clear in environment variables.
-  * Very low cost, if not entirely free for thousands of settings. 
-    * AWS System Manager Parameter Store does not charge for parameters.
-    * Still recommend using a custom KMS key that charges only $1 per month.
-    * Amounts as of 4/2019. Confirm what AWS charges you for these services.
-  * AWS Secrets Manager charges for every secret being managed, which can accumulate quickly with large projects.
-  * Configure multiple distinct application instances to support multiple tenants.
-    * For example, use separate databases with unique credentials for each tenant.
-  * Separation of responsibilities is achieved since operations can manage production configuration.
-    * Developers do not need to be involved with production configuration such as host names and passwords.
-  * All values are encrypted by default when stored in the AWS Parameter Store.
-    * Prevents accidentally not encrypting sensitive data.
+A typical Rails application spreads its settings across `database.yml`, `redis.yml`,
+`symmetric-encryption.yml`, a handful of initializers, and a growing list of environment variables. The
+production credentials live in some of those files, so they end up in one of three places: committed to
+the repository, baked into the container image, or passed in as plain-text environment variables that
+show up in `ps`, in crash reports, and in the container definition.
 
-## Introduction
+Adding a tenant, or a second production stack, means copying all of it and editing it by hand.
 
-When Secret Config starts up it reads all configuration entries into memory for all keys under the configured path.
-This means that once Secret Config has initialized all calls to Secret Config are extremely fast.
+### The Secret Config way
 
-The in-memory copy of the registry can be refreshed at any time by calling `SecretConfig.refresh!`. It can be refreshed
-via a process signal, or by calling it through an event, or via a messaging system.
+Move the values out of the files and into a central store, addressed by a path:
 
-It is suggested that any programmatic lookup to values stored in Secret Config are called every time a value is
-being used, rather than creating a local copy of the value. This ensures that a refresh of the registry will take effect
-immediately for any code reading from Secret Config.
+~~~yaml
+# What is left in database.yml
+production:
+  adapter:  mysql2
+  encoding: utf8
+  host:     <%= SecretConfig.fetch("mysql/host") %>
+  database: <%= SecretConfig.fetch("mysql/database") %>
+  username: <%= SecretConfig.fetch("mysql/username") %>
+  password: <%= SecretConfig.fetch("mysql/password") %>
+~~~
 
-## Limitations
+The file no longer holds a secret, and it no longer differs between environments. The value comes from
+whatever store the application was pointed at, and the path it was pointed at is the only thing that
+changes between development, production, and a per-tenant stack:
 
-AWS SSM Parameter Store is a very cost effective and often completely free solution with the following limitations:
+    /development/my_application
+    /production/my_application
+    /production/tenant73/my_application
 
-* For settings where the value is less than 4KB in size:
-    * Upto 10,000 settings per AWS region.
-    * Usually Free.
-        * Confirm [AWS SSM pricing](https://aws.amazon.com/systems-manager/pricing/) for your AWS account. 
-* For settings where the value is between 4KB and 8KB in size:
-    * There is an additional AWS cost for each of these settings since it has to be stored in the Advanced tier.
-    * See: [AWS SSM Parameter Store Parameter Tier](https://docs.aws.amazon.com/systems-manager/latest/userguide/ps-default-tier.html)
-* The maximum size for the value of any setting cannot exceed 8KB.
-    * See: [AWS SSM Limitations](https://docs.aws.amazon.com/general/latest/gr/ssm.html)
-* Includes up to 40 `GetParametersByPath` calls per second.
-    * The standard limit is ample for most scenarios, since the configuration is only read on 
-      startup and whenever `SecretConfig.refresh!` is called from within the application.
-    * An automated retry is built into Secret Config for when this limit is reached. Each retry waits a
-      random interval, which spreads out the retries when many servers restart at the same time.
-    * This limit can be increased to 100 GetParametersByPath calls per second for an additional cost.
-        * See: [AWS SSM Parameter Store throughput](https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-throughput.html)
+The same container image now runs in every one of them.
 
-## Next Steps
+## Quick start
 
-Checkout the [Secret Config API](api).
+This runs entirely from a local file. No AWS account is involved.
+
+**Step 1.** Add the gem to your `Gemfile`:
+
+~~~ruby
+gem "secret_config"
+~~~
+
+**Step 2.** Create `config/application.yml`:
+
+~~~yaml
+development:
+  mysql:
+    host:     127.0.0.1
+    database: my_application_development
+    username: my_application
+    password: secret
+
+  logger:
+    level:     info
+    pool_size: 25
+~~~
+
+**Step 3.** Read the settings:
+
+~~~ruby
+require "secret_config"
+
+SecretConfig.use(:file, path: "/development")
+
+SecretConfig.fetch("mysql/host")
+# => "127.0.0.1"
+
+SecretConfig.fetch("logger/pool_size", type: :integer)
+# => 25
+~~~
+
+**Step 4.** Override any setting with an environment variable, without touching the file. The name is the
+key, upcased, with `/` replaced by `_`:
+
+~~~shell
+export MYSQL_HOST=db.example.net
+~~~
+
+~~~ruby
+SecretConfig.fetch("mysql/host")
+# => "db.example.net"
+~~~
+
+That is the whole model. Everything else builds on it.
+
+In Rails, `SecretConfig.use` is replaced by a line in `application.rb` and the path defaults to the Rails
+environment. See the [Rails guide](rails).
+
+## Where settings are stored
+
+| Store | Used for |
+| --- | --- |
+| A local YAML file | Development and test. Checked into source control, holds no production credentials. |
+| AWS SSM Parameter Store | Production. Encrypted at rest with a KMS key you choose. |
+| Environment variables | Overriding any single setting from either store, in any environment. |
+
+Both stores are [providers](providers), and application code does not change between them. You can also
+write your own.
+
+## What you get
+
+* **Secrets are encrypted at rest** in the Parameter Store, under a KMS key you choose, which can be
+  rotated without touching the values.
+* **Nothing sensitive is in the image or the repository.** A container needs one environment variable,
+  `SECRET_CONFIG_PATH`, to know which configuration it is running.
+* **Multi-tenancy is a path.** Spinning up a tenant is copying a subtree and changing the few values that
+  differ, which the [command line tool](cli) does in one call.
+* **Operations owns production configuration.** Host names, pool sizes and passwords can change without a
+  developer, a deploy, or a code review.
+* **It costs almost nothing.** Standard-tier parameters are free, and a custom KMS key is about $1 per
+  month. AWS Secrets Manager charges per secret, which adds up quickly at the scale of an entire
+  application's configuration. Confirm current
+  [AWS SSM pricing](https://aws.amazon.com/systems-manager/pricing/) for your account, and see
+  [Providers](providers) for the Parameter Store size and rate limits.
+
+## Next steps
+
+* [Getting Started](guide): install it, and convert an existing application.
+* [Guide](api): the full programming interface, taught step by step.
+* [Rails](rails): `application.rb` setup, `database.yml`, and containers.
+* [Command Line](cli): import, export, diff, and per-tenant copies.

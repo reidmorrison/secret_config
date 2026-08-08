@@ -1,0 +1,2473 @@
+# Secret Config - Complete Documentation
+
+> Secret Config is centralized configuration and secrets management for Ruby and Rails applications.
+
+This file concatenates every page of https://config.reidmorrison.com for consumption by AI assistants.
+It is generated from the markdown sources in docs/ by `bundle exec rake llms_full`; do not edit it directly.
+A per-page index is available at https://config.reidmorrison.com/llms.txt
+
+
+---
+
+<!-- source: docs/index.md -->
+
+## What is Secret Config?
+
+
+
+Secret Config is centralized configuration and secrets management for Ruby and Rails applications.
+
+It reads a tree of settings from one place, a local YAML file in development or AWS SSM Parameter Store
+in production, into memory when the application starts, and serves them through a global `SecretConfig`
+singleton:
+
+~~~ruby
+SecretConfig.fetch("mysql/host")
+# => "db.example.net"
+
+SecretConfig.fetch("mysql/pool_size", type: :integer, default: 5)
+# => 25
+~~~
+
+Everything is read once at startup, so every lookup after that is an in-memory hash read. There is no
+network call on the path that reads a setting.
+
+## Why use it?
+
+### The problem with configuration files
+
+A typical Rails application spreads its settings across `database.yml`, `redis.yml`,
+`symmetric-encryption.yml`, a handful of initializers, and a growing list of environment variables. The
+production credentials live in some of those files, so they end up in one of three places: committed to
+the repository, baked into the container image, or passed in as plain-text environment variables that
+show up in `ps`, in crash reports, and in the container definition.
+
+Adding a tenant, or a second production stack, means copying all of it and editing it by hand.
+
+### The Secret Config way
+
+Move the values out of the files and into a central store, addressed by a path:
+
+~~~yaml
+# What is left in database.yml
+production:
+  adapter:  mysql2
+  encoding: utf8
+  host:     <%= SecretConfig.fetch("mysql/host") %>
+  database: <%= SecretConfig.fetch("mysql/database") %>
+  username: <%= SecretConfig.fetch("mysql/username") %>
+  password: <%= SecretConfig.fetch("mysql/password") %>
+~~~
+
+The file no longer holds a secret, and it no longer differs between environments. The value comes from
+whatever store the application was pointed at, and the path it was pointed at is the only thing that
+changes between development, production, and a per-tenant stack:
+
+    /development/my_application
+    /production/my_application
+    /production/tenant73/my_application
+
+The same container image now runs in every one of them.
+
+## Quick start
+
+This runs entirely from a local file. No AWS account is involved.
+
+**Step 1.** Add the gem to your `Gemfile`:
+
+~~~ruby
+gem "secret_config"
+~~~
+
+**Step 2.** Create `config/application.yml`:
+
+~~~yaml
+development:
+  mysql:
+    host:     127.0.0.1
+    database: my_application_development
+    username: my_application
+    password: secret
+
+  logger:
+    level:     info
+    pool_size: 25
+~~~
+
+**Step 3.** Read the settings:
+
+~~~ruby
+require "secret_config"
+
+SecretConfig.use(:file, path: "/development")
+
+SecretConfig.fetch("mysql/host")
+# => "127.0.0.1"
+
+SecretConfig.fetch("logger/pool_size", type: :integer)
+# => 25
+~~~
+
+**Step 4.** Override any setting with an environment variable, without touching the file. The name is the
+key, upcased, with `/` replaced by `_`:
+
+~~~shell
+export MYSQL_HOST=db.example.net
+~~~
+
+~~~ruby
+SecretConfig.fetch("mysql/host")
+# => "db.example.net"
+~~~
+
+That is the whole model. Everything else builds on it.
+
+In Rails, `SecretConfig.use` is replaced by a line in `application.rb` and the path defaults to the Rails
+environment. See the [Rails guide](rails).
+
+## Where settings are stored
+
+| Store | Used for |
+| --- | --- |
+| A local YAML file | Development and test. Checked into source control, holds no production credentials. |
+| AWS SSM Parameter Store | Production. Encrypted at rest with a KMS key you choose. |
+| Environment variables | Overriding any single setting from either store, in any environment. |
+
+Both stores are [providers](providers), and application code does not change between them. You can also
+write your own.
+
+## What you get
+
+* **Secrets are encrypted at rest** in the Parameter Store, under a KMS key you choose, which can be
+  rotated without touching the values.
+* **Nothing sensitive is in the image or the repository.** A container needs one environment variable,
+  `SECRET_CONFIG_PATH`, to know which configuration it is running.
+* **Multi-tenancy is a path.** Spinning up a tenant is copying a subtree and changing the few values that
+  differ, which the [command line tool](cli) does in one call.
+* **Operations owns production configuration.** Host names, pool sizes and passwords can change without a
+  developer, a deploy, or a code review.
+* **It costs almost nothing.** Standard-tier parameters are free, and a custom KMS key is about $1 per
+  month. AWS Secrets Manager charges per secret, which adds up quickly at the scale of an entire
+  application's configuration. Confirm current
+  [AWS SSM pricing](https://aws.amazon.com/systems-manager/pricing/) for your account, and see
+  [Providers](providers) for the Parameter Store size and rate limits.
+
+## Next steps
+
+* [Getting Started](guide): install it, and convert an existing application.
+* [Guide](api): the full programming interface, taught step by step.
+* [Rails](rails): `application.rb` setup, `database.yml`, and containers.
+* [Command Line](cli): import, export, diff, and per-tenant copies.
+
+
+---
+
+<!-- source: docs/guide.md -->
+
+## Getting Started
+
+
+
+This page takes an existing application from no Secret Config at all to reading its first settings, and
+then converts the configuration files it already has. It stays on the local file provider throughout, so
+nothing here needs an AWS account.
+
+Once this is working, the [Guide](api) covers the full programming interface, and
+[Command Line](cli) covers moving the settings into AWS SSM Parameter Store for production.
+
+## Step 1: Install
+
+Add to your `Gemfile`:
+
+~~~ruby
+gem "secret_config"
+~~~
+
+Then:
+
+    bundle install
+
+Secret Config requires Ruby 3.2 or later. The AWS SDK is not a dependency, so nothing is installed for
+Parameter Store until you ask for it. See [Providers](providers).
+
+## Step 2: Create the development and test settings file
+
+Create `config/application.yml`. This file holds the settings for local development and for the test
+suite. It is shared by every developer on the team and is checked into source control:
+
+~~~yaml
+development:
+  mysql:
+    host:     127.0.0.1
+    database: my_application_development
+    username: my_application
+    password: secret
+
+  mongo:
+    database:  my_application_development
+    primary:   127.0.0.1:27017
+    secondary: 127.0.0.1:27018
+
+  secrets:
+    secret_key_base: somereallylongstring
+
+test:
+  mysql:
+    host:     127.0.0.1
+    database: my_application_test
+    username: my_application
+    password: secret
+
+  mongo:
+    database:  my_application_test
+    primary:   127.0.0.1:27017
+    secondary: 127.0.0.1:27018
+
+  secrets:
+    secret_key_base: somereallylongteststring
+~~~
+
+The top level keys are environments. Everything under one of them is that environment's settings, grouped
+into a hierarchy that can go as deep as you like.
+
+**Do not put production credentials in this file.** Those belong in the central store, which is what the
+rest of the documentation is about. This file is for values that are safe for every developer to have,
+and safe to commit.
+
+## Step 3: Point the application at it
+
+~~~ruby
+require "secret_config"
+
+SecretConfig.use(:file, path: "/development")
+~~~
+
+`path` is the root that everything is read relative to. Because it is `/development` here, the key
+`mysql/host` resolves to `development.mysql.host` in the file above.
+
+Rails applications do this differently, with one line in `application.rb` that also picks the path from
+`Rails.env`. See the [Rails guide](rails).
+
+## Step 4: Read a setting
+
+~~~ruby
+SecretConfig.fetch("mysql/host")
+# => "127.0.0.1"
+~~~
+
+Keys are paths into the tree, joined with `/`, and they are relative to the root set in Step 3.
+
+That is enough to start. The [Guide](api) picks up here and covers type conversion, defaults, lists,
+binary values, and the rest.
+
+## Step 5: Convert an existing config file
+
+Now go through the configuration files the application already has, and look for the values that differ
+between environments or that should not be committed.
+
+A typical `database.yml` before:
+
+~~~yaml
+defaults: &defaults
+  encoding: utf8
+  adapter:  mysql2
+
+development:
+  <<:       *defaults
+  database: my_application_development
+  username: jack
+  password: jackrules
+  host:     localhost
+
+test:
+  <<:       *defaults
+  database: my_application_test
+  username: tester
+  password: khjsdjhdsjhdsr32
+  host:     test.server
+
+production:
+  <<:       *defaults
+  database: my_application_production
+  username: product
+  password: donotexpose45
+  host:     production.server
+~~~
+
+Replace the values with calls to `SecretConfig.fetch`:
+
+~~~yaml
+configuration: &configuration
+  encoding: utf8
+  adapter:  mysql2
+  database: <%= SecretConfig.fetch("mysql/database") %>
+  username: <%= SecretConfig.fetch("mysql/username") %>
+  password: <%= SecretConfig.fetch("mysql/password") %>
+  host:     <%= SecretConfig.fetch("mysql/host") %>
+
+development:
+  <<: *configuration
+
+test:
+  <<: *configuration
+
+production:
+  <<: *configuration
+~~~
+
+The three environments are now identical, because the thing that differed between them has moved out. The
+production password is no longer in the repository, and adding a fourth environment does not mean editing
+this file at all.
+
+Repeat for `redis.yml`, `symmetric-encryption.yml`, and any initializer holding a credential. There are
+worked examples for a few common ones on the [Rails](rails) page.
+
+## Step 6: Replace custom config files in libraries
+
+The same idea removes proprietary config files from gems and internal libraries. Instead of requiring a
+config file of its own, a library reads what it needs directly:
+
+~~~ruby
+def http_client
+  @http_client ||=
+    PersistentHTTP.new(
+      name:         "HTTPClient",
+      url:          SecretConfig.fetch("http_client/url"),
+      logger:       logger,
+      pool_size:    SecretConfig.fetch("http_client/pool_size", type: :integer, default: 10),
+      warn_timeout: SecretConfig.fetch("http_client/warn_timeout", type: :float, default: 0.25),
+      open_timeout: SecretConfig.fetch("http_client/open_timeout", type: :float, default: 30),
+      read_timeout: SecretConfig.fetch("http_client/read_timeout", type: :float, default: 30),
+      force_retry:  true
+    )
+end
+~~~
+
+An application using that library adds only the entries it wants to change:
+
+~~~yaml
+http_client:
+  url:          https://test.example.com
+  pool_size:    20
+  read_timeout: 300
+~~~
+
+No custom config file, no initializer, and the values can still be overridden per environment or per
+tenant later without the library knowing.
+
+When a library reads several settings under one path, `SecretConfig.configure` names that path once
+instead of repeating it. See [Naming a subtree once](api#step-9-name-a-subtree-once) in the Guide.
+
+## Next steps
+
+* [Guide](api): the full programming interface.
+* [Configuration](config): `SecretConfig.use` options and the environment variables that change startup.
+* [Rails](rails): `application.rb`, containers, and worked examples.
+* [Command Line](cli): moving these settings into AWS SSM Parameter Store.
+
+
+---
+
+<!-- source: docs/api.md -->
+
+## Guide
+
+
+
+This page walks the whole programming interface, one step at a time. Each step builds on the one before
+it, using a single example application whose configuration grows as it goes.
+
+If you have not installed the gem yet, start with [Getting Started](guide).
+
+Throughout, the application is pointed at a local file:
+
+~~~ruby
+require "secret_config"
+
+SecretConfig.use(:file, path: "/development")
+~~~
+
+Nothing on this page changes when that becomes AWS SSM Parameter Store in production. That is the point
+of it: the code reads keys, and where the values come from is a deployment decision. See
+[Configuration](config) and [Providers](providers).
+
+## Step 1: Read a value
+
+Start with two settings in `config/application.yml`:
+
+~~~yaml
+development:
+  mysql:
+    host:     127.0.0.1
+    database: my_application_development
+~~~
+
+`fetch` returns the value for a key, and raises when the key is missing:
+
+~~~ruby
+SecretConfig.fetch("mysql/host")
+# => "127.0.0.1"
+
+SecretConfig.fetch("mysql/port")
+# => SecretConfig::MissingMandatoryKey (Missing configuration value for /development/mysql/port)
+~~~
+
+`[]` does the same thing but returns `nil` instead of raising:
+
+~~~ruby
+SecretConfig["mysql/host"]
+# => "127.0.0.1"
+
+SecretConfig["mysql/port"]
+# => nil
+~~~
+
+Prefer `fetch`. A missing setting is nearly always a deployment mistake, and it is much easier to
+diagnose from an exception naming the key at startup than from a `nil` that surfaces three layers away.
+
+Keys are relative to the root path set in `use`, so `mysql/host` above reads `/development/mysql/host`.
+
+## Step 2: Supply a default
+
+Not every setting has to be present. Give `fetch` a `default:` for the ones that do not:
+
+~~~ruby
+SecretConfig.fetch("mysql/port", default: 3306)
+# => 3306
+~~~
+
+When the default is expensive to compute, or is only valid when the key really is absent, pass a block
+instead. It is called only when the key is missing:
+
+~~~ruby
+SecretConfig.fetch("mysql/port") { discover_port_from_service_registry }
+~~~
+
+A block takes precedence over `default:` when both are supplied.
+
+Use defaults for values with a sensible fallback, such as a pool size or a timeout. Do not use them for
+credentials or host names: a default password that silently works in production is worse than a failure
+at startup.
+
+## Step 3: Convert the type
+
+Values arrive as strings, because that is all AWS SSM Parameter Store and environment variables can
+hold. `type:` converts them:
+
+~~~yaml
+development:
+  mysql:
+    host:      127.0.0.1
+    database:  my_application_development
+    pool_size: 25
+    timeout:   0.5
+    reconnect: true
+    adapter:   mysql2
+~~~
+
+~~~ruby
+SecretConfig.fetch("mysql/pool_size", type: :integer)
+# => 25
+
+SecretConfig.fetch("mysql/timeout", type: :float)
+# => 0.5
+
+SecretConfig.fetch("mysql/reconnect", type: :boolean)
+# => true
+
+SecretConfig.fetch("mysql/adapter", type: :symbol)
+# => :mysql2
+~~~
+
+The supported types are `:string` (the default), `:integer`, `:float`, `:boolean`, `:symbol` and
+`:json`. `:json` parses the value and returns the resulting Hash or Array.
+
+Without `type:`, the value comes back as it was stored:
+
+~~~ruby
+SecretConfig.fetch("mysql/pool_size")
+# => "25"
+~~~
+
+Type conversion is applied to a `default:` as well, so `default: 3306` and `default: "3306"` both come
+back as `3306` under `type: :integer`.
+
+## Step 4: Read a list
+
+There is no array type. A list is one value with a delimiter, and `separator:` splits it:
+
+~~~yaml
+development:
+  address_service:
+    hostnames: primary.example.net,secondary.example.net,backup.example.net
+    ports:     12345,5343,26815
+~~~
+
+~~~ruby
+SecretConfig.fetch("address_service/hostnames", separator: ",")
+# => ["primary.example.net", "secondary.example.net", "backup.example.net"]
+~~~
+
+`separator:` combines with `type:`, which is then applied to each element:
+
+~~~ruby
+SecretConfig.fetch("address_service/ports", type: :integer, separator: ",")
+# => [12345, 5343, 26815]
+~~~
+
+Elements are stripped of surrounding whitespace, so `a, b, c` and `a,b,c` give the same result.
+
+## Step 5: Read binary data
+
+Encryption keys and initialization vectors are not text. Store them with strict base64 encoding, and
+pass `encoding: :base64` to decode them on the way out:
+
+~~~yaml
+development:
+  symmetric_encryption:
+    iv: FW+/wLubAYM+ZU0bWQj59Q==
+~~~
+
+~~~ruby
+# As stored:
+SecretConfig.fetch("symmetric_encryption/iv")
+# => "FW+/wLubAYM+ZU0bWQj59Q=="
+
+# Decoded:
+SecretConfig.fetch("symmetric_encryption/iv", encoding: :base64)
+# => "\x15o\xBF\xC0\xBB\x9B\x01\x83>eM\eY\b\xF9\xF5"
+~~~
+
+Decoding happens before type conversion, so `encoding:` and `type:` can be combined.
+
+## Step 6: Override with an environment variable
+
+Any setting can be overridden by an environment variable, in any environment, without changing the
+store. The name is the key, upcased, with `/` replaced by `_`:
+
+| Key | Environment variable |
+| --- | --- |
+| `mysql/host` | `MYSQL_HOST` |
+| `mysql/pool_size` | `MYSQL_POOL_SIZE` |
+| `symmetric_encryption/iv` | `SYMMETRIC_ENCRYPTION_IV` |
+
+~~~shell
+export MYSQL_HOST=db.example.net
+~~~
+
+~~~ruby
+SecretConfig.fetch("mysql/host")
+# => "db.example.net"
+~~~
+
+This is how a developer points at a different database for an afternoon, and how a container is nudged
+without editing the central store.
+
+Two details are worth knowing:
+
+* An override of a key that **exists in the store** is applied when the registry is loaded, so changing
+  the variable inside a running process has no effect until the next
+  [refresh](#step-10-refresh-at-runtime).
+* A variable with **no matching key in the store** is read on every lookup, so a change to it takes
+  effect on the next read. Such a key is never written into the in-memory copy, so it does not appear in
+  `configuration` output.
+
+Set `SecretConfig.check_env_var = false` to turn overrides off entirely. See
+[Configuration](config) for when that is worth doing.
+
+## Step 7: Ask whether a key is set
+
+~~~ruby
+SecretConfig.key?("mysql/host")
+# => true
+~~~
+
+`key?` answers "is a value available", not "is this in the central store". A key supplied only by an
+environment variable counts as present, so that `key?` agrees with `[]` and `fetch`, which both return
+the override:
+
+~~~ruby
+SecretConfig.key?("mysql/replica_host")
+# => false
+~~~
+
+~~~shell
+export MYSQL_REPLICA_HOST=replica.example.net
+~~~
+
+~~~ruby
+SecretConfig.key?("mysql/replica_host")
+# => true
+~~~
+
+To ask about the central store alone, set `SecretConfig.check_env_var = false`.
+
+`key?` is most useful for optional features: a secondary encryption key during a rotation, a replica
+that only some deployments have.
+
+## Step 8: Look at the whole tree
+
+`configuration` returns a nested Hash copy of everything in the registry:
+
+~~~ruby
+SecretConfig.configuration
+# => {
+#      "mysql" => {
+#        "host"      => "127.0.0.1",
+#        "database"  => "my_application_development",
+#        "pool_size" => 25,
+#        "password"  => "[FILTERED]"
+#      },
+#      "logger" => {
+#        "level" => "info"
+#      }
+#    }
+~~~
+
+Note the password. Values whose key looks sensitive are masked, which is covered in
+[Step 11](#step-11-keep-secrets-out-of-dumps).
+
+This is a debugging and diagnostics tool, for a console or a startup banner. It builds a new Hash every
+time it is called, so it does not belong on a request path. Read individual keys with `fetch`.
+
+## Step 9: Name a subtree once
+
+When a component reads several settings under one path, repeating that path gets noisy:
+
+~~~ruby
+Kafka::Client.new(
+  seed_brokers:       SecretConfig.fetch("suppliers/kafka_service/brokers", separator: ","),
+  delivery_interval:  SecretConfig.fetch("suppliers/kafka_service/delivery_interval", type: :integer, default: 0),
+  delivery_threshold: SecretConfig.fetch("suppliers/kafka_service/delivery_threshold", type: :integer, default: 0),
+  max_queue_size:     SecretConfig.fetch("suppliers/kafka_service/max_queue_size", type: :integer, default: 10_000)
+)
+~~~
+
+`SecretConfig.configure` takes the path once and yields an object that reads relative to it:
+
+~~~ruby
+SecretConfig.configure("suppliers/kafka_service") do |config|
+  Kafka::Client.new(
+    seed_brokers:       config.fetch("brokers", separator: ","),
+    delivery_interval:  config.fetch("delivery_interval", type: :integer, default: 0),
+    delivery_threshold: config.fetch("delivery_threshold", type: :integer, default: 0),
+    max_queue_size:     config.fetch("max_queue_size", type: :integer, default: 10_000)
+  )
+end
+~~~
+
+The yielded object supports `fetch`, `[]`, `[]=`, `key?`, `set`, `delete`, `configuration` and
+`refresh!`, with the same options as the global calls.
+
+This is particularly useful in a library, which can take its root path as an argument and let the
+application decide where its settings live.
+
+## Step 10: Refresh at runtime
+
+The registry is read once at startup. `refresh!` re-reads the whole tree from the provider:
+
+~~~ruby
+SecretConfig.refresh!
+# => true
+~~~
+
+Keys that disappeared from the central store are dropped, changed values are picked up, and any
+`${...}` [interpolation](interpolation) is evaluated again.
+
+The usual way to trigger it in a long-running process is a signal. Add this on startup:
+
+~~~ruby
+Signal.trap("USR2") do
+  SecretConfig.refresh!
+end
+~~~
+
+Then, to make a running process re-read its configuration:
+
+~~~shell
+kill -SIGUSR2 1234
+~~~
+
+Where `1234` is the process ID. An event from a message queue, or a periodic timer, works equally well.
+
+Because a refresh can change values underneath the application, read settings where they are used rather
+than copying them into a constant at startup:
+
+~~~ruby
+# Picks up a refresh:
+def pool_size
+  SecretConfig.fetch("mysql/pool_size", type: :integer)
+end
+
+# Frozen at startup, ignores every refresh:
+POOL_SIZE = SecretConfig.fetch("mysql/pool_size", type: :integer)
+~~~
+
+Lookups are in-memory hash reads, so calling `fetch` on every use is not a performance concern.
+
+## Step 11: Keep secrets out of dumps
+
+`SecretConfig.filters` holds a list of patterns. A key matching one of them has its value replaced with
+`[FILTERED]` in `configuration` output and in command line exports:
+
+~~~ruby
+SecretConfig.filters
+# => [/password/i, /key\Z/i, /passphrase/i, /secret/i, /pwd\Z/i]
+~~~
+
+They are matched against the relative key, case-insensitively, so `mysql/password` and
+`SYMMETRIC_ENCRYPTION/Key` are both masked. Replace the list to suit your naming:
+
+~~~ruby
+SecretConfig.filters = [/password/i, /secret/i, /_token\Z/i, /api_key/i]
+~~~
+
+Set it to `nil` to disable masking entirely.
+
+Filtering applies **only** to those dumps. `fetch` and `[]` always return the real value, so masking a
+key never breaks the application that reads it. It exists so that a console session, a diagnostic page,
+or an exported YAML file does not casually spill credentials.
+
+## Step 12: Write a value
+
+Settings can be written back to the store:
+
+~~~ruby
+SecretConfig["logger/level"] = "debug"
+
+# Same thing:
+SecretConfig.set("logger/level", "debug")
+~~~
+
+And removed:
+
+~~~ruby
+SecretConfig.delete("logger/level")
+~~~
+
+Both the file and the SSM providers support writing. Writing to a file rewrites it from its parsed
+contents, so comments and formatting are lost. See [Providers](providers) before doing that to a file
+you care about.
+
+Most applications never write. Configuration is normally managed from the [command line](cli), by
+whoever operates the environment, and only read by the application. Writing from application code is for
+the rare case of a value the application itself generates.
+
+## Troubleshooting
+
+### `MissingMandatoryKey` at startup
+
+The key is not in the store under the root path, and no `default:` was supplied. Check the root path
+first, since it is the more common mistake:
+
+~~~ruby
+SecretConfig.registry.path
+# => "/development"
+
+SecretConfig.configuration.keys
+# => ["mysql", "logger"]
+~~~
+
+The exception message contains the full path that was looked up, which makes the root path visible:
+`Missing configuration value for /development/mysql/port`.
+
+### A setting has the wrong value, and the store looks right
+
+An environment variable is almost certainly overriding it. Check the name the key maps to:
+
+~~~shell
+env | grep MYSQL_
+~~~
+
+This is easy to hit by accident, because the names are short and generic. `PORT`, `HOST` and `LOG_LEVEL`
+are set by many platforms for their own reasons.
+
+### A value changed in the store but the application still sees the old one
+
+The registry is read at startup. Call `SecretConfig.refresh!`, or restart. See
+[Step 10](#step-10-refresh-at-runtime).
+
+### `${random}` gives a different value on every restart
+
+That is what it does. It is re-evaluated on every load and refresh, which makes it wrong for anything
+that has to stay stable, such as a password. Use the command line's `__generate__` instead, which
+materializes the value once during an import. See [Command Line](cli).
+
+### An export shows `[FILTERED]` where a value should be
+
+Working as intended. Pass `--no-filter` to the export, or adjust `SecretConfig.filters`. See
+[Step 11](#step-11-keep-secrets-out-of-dumps).
+
+### `UndefinedRootError: Either set env var 'SECRET_CONFIG_PATH' or call SecretConfig.use`
+
+No root path was resolved. Outside Rails there is nothing to fall back on, so pass `path:` to
+`SecretConfig.use`, or set `SECRET_CONFIG_PATH`. See [Configuration](config).
+
+## Next steps
+
+* [Configuration](config): `SecretConfig.use` options, and the environment variables that change startup.
+* [Interpolation](interpolation): `${...}` values, `__import__`, and sharing settings between nodes.
+* [Command Line](cli): managing the central store.
+* [Testing](testing): controlling settings from a test suite.
+
+
+---
+
+<!-- source: docs/config.md -->
+
+## Configuration
+
+
+
+This page covers everything that decides how the registry is built at startup: which provider it reads
+from, what root path it reads under, and the environment variables that override both.
+
+Rails applications configure this with one line in `application.rb`. See the [Rails guide](rails), which
+covers setup there; the options themselves are all documented here.
+
+## Step 1: Choose a provider and a path
+
+~~~ruby
+SecretConfig.use(:file, path: "/development")
+~~~
+
+Two arguments matter:
+
+* **The provider**, `:file` or `:ssm`, decides where settings are read from. See
+  [Providers](providers).
+* **`path:`** is the root that every key is read relative to. It is absolute; a value given without a
+  leading `/` has one added.
+
+Anything else passed to `use` goes to the provider. `file_name:` for the file provider, `key_id:`,
+`retry_count:` and the AWS client options for SSM.
+
+A typical non-Rails application picks the provider from its own environment:
+
+~~~ruby
+if ENV["APP_ENV"] == "production"
+  SecretConfig.use(:ssm, path: "/production/my_application")
+else
+  SecretConfig.use(:file, path: "/development")
+end
+~~~
+
+Call `use` as early as possible, before anything that reads a setting. The first call to any accessor
+builds a default registry if `use` has not been called, and that default is rarely what you want.
+
+## Step 2: Choose the root path
+
+The root path uniquely identifies one configuration. Everything under it belongs to that instance of the
+application, and nothing outside it is visible:
+
+    /development/my_application
+    /production/my_application
+
+Two entirely separate production instances in one AWS account are two paths:
+
+    /production1/my_application
+    /production2/my_application
+
+    /production/instance1/my_application
+    /production/instance2/my_application
+
+The shape is up to you. The only requirement is that it is unique within an AWS account. The same path
+can be reused in a different account, and paths are not replicated across regions.
+
+When no path is given, the registry falls back to `SECRET_CONFIG_PATH`, then `RAILS_ENV`, then
+`Rails.env`. If none of those resolve, it raises `UndefinedRootError`.
+
+## Step 3: Decide about environment variable overrides
+
+Any key can be overridden by an environment variable named after it, upcased, with `/` replaced by `_`.
+This is on by default:
+
+~~~ruby
+SecretConfig.check_env_var?
+# => true
+~~~
+
+Turn it off to make the central store the only source:
+
+~~~ruby
+SecretConfig.check_env_var = false
+~~~
+
+It is worth turning off when the application runs somewhere that sets a lot of environment variables for
+its own purposes, since key names like `logger/level` and `mysql/port` collide with common ones. Leaving
+it on is the right default for most deployments, because it is the escape hatch that lets a setting be
+changed without touching the store.
+
+Overrides are covered in full, including exactly when a change takes effect, in
+[Guide, Step 6](api#step-6-override-with-an-environment-variable).
+
+## Step 4: Decide about interpolation
+
+Values may contain `${...}` tokens, and a node may contain an `__import__` key. Both are evaluated when
+the registry is loaded. This is on by default:
+
+~~~ruby
+SecretConfig.use(:ssm, path: "/production/my_application", interpolate: false)
+~~~
+
+Setting `interpolate: false` stores every value exactly as it appears, tokens and all, and leaves
+`__import__` keys visible in the registry. It exists for tooling that needs to see the store verbatim.
+Applications should leave it on. See [Interpolation](interpolation).
+
+## Step 5: Set the filters, if the defaults do not fit
+
+Keys matching `SecretConfig.filters` have their values masked in `configuration` output and in command
+line exports. The default list:
+
+~~~ruby
+SecretConfig.filters
+# => [/password/i, /key\Z/i, /passphrase/i, /secret/i, /pwd\Z/i]
+~~~
+
+See [Guide, Step 11](api#step-11-keep-secrets-out-of-dumps).
+
+## Environment variables
+
+These are read at startup and change how the registry is built. They are the only configuration a
+deployed container normally needs.
+
+| Name | Effect | Precedence |
+| --- | --- | --- |
+| `SECRET_CONFIG_PATH` | Root path the configuration is read from | Wins over the configured `path:` |
+| `SECRET_CONFIG_PROVIDER` | Provider to use, `file` or `ssm` | Wins over the configured provider |
+| `SECRET_CONFIG_FILE_NAME` | File the `file` provider reads and writes | Used when no `file_name:` is given |
+| `SECRET_CONFIG_KEY_ID` | KMS key id used when writing to SSM | Used when no `key_id:` is given |
+| `SECRET_CONFIG_KEY_ALIAS` | KMS key alias used when writing to SSM | Used when no `key_alias:` is given |
+| `SECRET_CONFIG_SILENCE_DEPRECATIONS` | Suppresses deprecation warnings on stderr, when set to any value | n/a |
+
+`SECRET_CONFIG_PATH` and `SECRET_CONFIG_PROVIDER` override what the code asked for, which is what makes
+one image deployable everywhere:
+
+~~~shell
+export SECRET_CONFIG_PROVIDER=ssm
+export SECRET_CONFIG_PATH=/production/my_application
+~~~
+
+The two KMS variables and `SECRET_CONFIG_FILE_NAME` work the other way round: an explicit argument in
+code wins, and the variable supplies the value when there is none.
+
+One consequence of `SECRET_CONFIG_PROVIDER` is worth knowing: when it selects a **different** provider
+from the one the code asked for, the arguments passed alongside are dropped, since they were meant for
+the other provider. Setting `SECRET_CONFIG_PROVIDER=file` against a `use(:ssm, path: ..., key_id: ...)`
+gives a file provider with its own defaults, not a file provider carrying a `key_id`. Supply what it
+needs through `SECRET_CONFIG_FILE_NAME` instead.
+
+Note that these are distinct from the per-setting overrides in
+[Guide, Step 6](api#step-6-override-with-an-environment-variable). These configure Secret Config itself;
+those replace individual values.
+
+## The registry
+
+`SecretConfig.registry` returns the underlying `Registry`, which is occasionally useful for
+diagnostics:
+
+~~~ruby
+SecretConfig.registry.path
+# => "/development"
+
+SecretConfig.registry.provider
+# => #<SecretConfig::Providers::File:0x...>
+
+SecretConfig.registry.interpolate
+# => true
+~~~
+
+Calling `use` again replaces the registry entirely, which re-reads everything from the new provider.
+That is how a test suite points at a different store; see [Testing](testing).
+
+## Next steps
+
+* [Providers](providers): the file and SSM providers, their options, and writing your own.
+* [Rails](rails): where all of this goes in a Rails application.
+* [Interpolation](interpolation): `${...}` and `__import__`.
+
+
+---
+
+<!-- source: docs/providers.md -->
+
+## Providers
+
+
+
+A provider is where settings are actually stored. Two ship with the gem, and application code reads the
+same way against either:
+
+| Provider | Store | Typical use |
+| --- | --- | --- |
+| `:file` | A local YAML file | Development, test, and the CLI without AWS |
+| `:ssm` | AWS SSM Parameter Store | Production, and anywhere secrets must be encrypted at rest |
+
+Select one when the registry is built:
+
+~~~ruby
+SecretConfig.use(:file, path: "/development")
+SecretConfig.use(:ssm, path: "/production/my_application")
+~~~
+
+Arguments other than `path:` and `interpolate:` are passed through to the provider, and are documented
+per provider below. See [Configuration](config) for the rest of `use`.
+
+## File provider
+
+Reads and writes a single YAML file. It has no dependencies beyond the standard library, so it works
+anywhere with no credentials and no network.
+
+~~~ruby
+SecretConfig.use(:file, path: "/development")
+~~~
+
+### Which file
+
+The file is chosen in this order:
+
+1. The `file_name:` argument.
+2. The `SECRET_CONFIG_FILE_NAME` environment variable.
+3. `config/application.yml`.
+
+~~~ruby
+SecretConfig.use(:file, path: "/development", file_name: "config/settings.yml")
+~~~
+
+A shared file is useful when several engines or internal gems live in one repository and should read the
+same development settings:
+
+~~~ruby
+SecretConfig.use(:file, path: "/development", file_name: "../../../config/application.yml")
+~~~
+
+### Layout
+
+The file is a nested hash. The registry's root path selects the subtree it starts from, so a file
+holding several environments has one top-level key per environment:
+
+~~~yaml
+development:
+  mysql:
+    host: 127.0.0.1
+
+test:
+  mysql:
+    host: 127.0.0.1
+~~~
+
+With `path: "/development"`, the key `mysql/host` reads `development.mysql.host`.
+
+The path does not have to be one level deep. A file shared by several applications can nest them:
+
+~~~yaml
+development:
+  my_application:
+    mysql:
+      host: 127.0.0.1
+~~~
+
+Read with `path: "/development/my_application"`.
+
+### ERB
+
+The file is passed through ERB before it is parsed, so values can be computed:
+
+~~~yaml
+development:
+  mysql:
+    host: <%= ENV.fetch("DB_HOST", "127.0.0.1") %>
+~~~
+
+This is evaluated every time the file is read, which includes every `refresh!`.
+
+### Writing
+
+The file provider is writable, so `set`, `[]=` and `delete` work against it, as do the corresponding
+[command line](cli) operations.
+
+Two things to know before writing to a file you care about:
+
+* **The file is rewritten from its parsed contents.** Comments, key order and formatting are not
+  preserved. What comes back is what YAML emits.
+* **A file containing ERB is refused**, with a `ConfigurationError`, rather than written. Rewriting it
+  would replace the ERB with whatever it evaluated to, silently turning a template into a literal.
+  Edit those files directly.
+
+The file does not have to exist before the provider is constructed; a write creates it, along with any
+missing directories. Reads still raise `ConfigurationError` when it is missing, so
+`SecretConfig.use(:file)` against a nonexistent file fails at startup exactly as before. This is what
+lets `secret-config --import` bootstrap a new file from nothing.
+
+### Errors
+
+| Error | Cause |
+| --- | --- |
+| `ConfigurationError: Cannot find config file: ...` | The file does not exist, on a read |
+| `ConfigurationError: Path /x/y not found in file: ...` | The file exists but has nothing at the root path |
+| `ConfigurationError: Cannot write to config file containing ERB: ...` | A write was attempted against a template |
+
+The second one is usually a mismatch between the root path and the file's top-level keys. Check both.
+
+## SSM provider
+
+Reads and writes AWS SSM Parameter Store. Every value is written as a `SecureString`, encrypted with a
+KMS key, so nothing is stored in the clear.
+
+~~~ruby
+SecretConfig.use(:ssm, path: "/production/my_application")
+~~~
+
+### Installing
+
+The AWS SDK is not a dependency of this gem, so that applications using the file provider do not pull it
+in. Add it yourself:
+
+~~~ruby
+gem "aws-sdk-ssm"
+~~~
+
+Without it, constructing the provider raises
+`LoadError: Install gem 'aws-sdk-ssm' to use AWS Parameter Store`.
+
+### Options
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `key_id:` | `SECRET_CONFIG_KEY_ID`, then the account default `alias/aws/ssm` | KMS key id used when writing |
+| `key_alias:` | `SECRET_CONFIG_KEY_ALIAS` | KMS key alias used when writing. Takes precedence over `key_id:`, and is prefixed with `alias/` if not already |
+| `retry_count:` | `25` | Maximum retries when the Parameter Store throttles a read |
+| `retry_max_ms:` | `10_000` | Upper bound in ms for the sleep between retries |
+
+Any other option is passed straight to
+[`Aws::SSM::Client`](https://docs.aws.amazon.com/sdkforruby/api/Aws/SSM/Client.html#initialize-instance_method),
+which is how region, credentials and endpoints are set:
+
+~~~ruby
+SecretConfig.use(
+  :ssm,
+  path:        "/production/my_application",
+  key_id:      "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  credentials: Aws::AssumeRoleCredentials.new(
+    role_arn:          "arn:aws:iam::111111122222222:role/assume_role_name",
+    role_session_name: "session-name-to-identify-#{SecureRandom.uuid}"
+  )
+)
+~~~
+
+The KMS key must exist before it is named here. Using a custom key rather than the account default is
+what allows the key to be rotated on its own schedule, which is generally what a compliance regime is
+asking for.
+
+If [Semantic Logger](https://logger.reidmorrison.com/) is loaded, the AWS client logs through it.
+
+### Retries and throttling
+
+Parameter Store allows 40 `GetParametersByPath` calls per second on the standard tier. The whole
+configuration is read at startup and on `refresh!`, so this is only reached when many processes start at
+once, such as a fleet-wide restart.
+
+When it is, the provider retries. Each retry sleeps a **random** interval between zero and
+`retry_max_ms`, rather than backing off exponentially. That is deliberate: the servers hitting the limit
+are all restarting together, and a random sleep spreads them out instead of having them retry in
+lockstep.
+
+The limit can be raised to 100 calls per second for an additional cost. See
+[Parameter Store throughput](https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-throughput.html).
+
+### IAM policy
+
+The application needs these actions:
+
+~~~json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParametersByPath",
+                "ssm:GetParameter",
+                "ssm:PutParameter",
+                "ssm:DeleteParameter"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+~~~
+
+This grants only Parameter Store capabilities, not the rest of AWS Systems Manager. An application that
+never writes needs only the two `Get` actions.
+
+Narrow `Resource` to the paths the application actually uses when you can. `"*"` is shown here because
+the right ARN depends on your account and region.
+
+These are not used by Secret Config, but are worth granting to anyone managing parameters through the
+AWS Console:
+
+* `ssm:DescribeParameters`
+* `ssm:GetParameterHistory`
+* `ssm:GetParameters`
+
+### Limits and cost
+
+Parameter Store is inexpensive, often free, within these limits:
+
+* **Values under 4KB**: up to 10,000 parameters per AWS region, on the free standard tier. Confirm
+  current [AWS SSM pricing](https://aws.amazon.com/systems-manager/pricing/) for your account.
+* **Values between 4KB and 8KB**: charged, because they require the advanced tier. See
+  [parameter tiers](https://docs.aws.amazon.com/systems-manager/latest/userguide/ps-default-tier.html).
+* **Maximum value size is 8KB.** See [SSM limits](https://docs.aws.amazon.com/general/latest/gr/ssm.html).
+* **40 `GetParametersByPath` calls per second**, as covered above.
+
+A custom KMS key costs about $1 per month. By comparison, AWS Secrets Manager charges per secret per
+month, which at the granularity of an application's entire configuration adds up quickly.
+
+## Writing a provider
+
+A provider implements four methods, and inherits from `Providers::Provider`:
+
+~~~ruby
+module SecretConfig
+  module Providers
+    class MyProvider < Provider
+      # Yields every key under `path`, with its **absolute** key and string value.
+      def each(path)
+        # yield("/production/my_application/mysql/host", "db.example.net")
+      end
+
+      # Returns the value for one absolute key, or nil when missing.
+      def fetch(key)
+      end
+
+      # Writes one absolute key.
+      def set(key, value)
+      end
+
+      # Removes one absolute key. Deleting a missing key is not an error.
+      def delete(key)
+      end
+    end
+  end
+end
+~~~
+
+Providers deal in **absolute** keys. The registry strips its root path before caching, so everything
+above the provider works in relative keys. `fetch` is used to resolve an absolute
+[`__import__`](interpolation); `each` is what the registry calls on load and refresh.
+
+Register it in the `autoload` list in `lib/secret_config.rb`, after which `:my_provider` resolves to
+`SecretConfig::Providers::MyProvider`:
+
+~~~ruby
+SecretConfig.use(:my_provider, path: "/production/my_application")
+~~~
+
+An instance can also be passed directly, which avoids registering it at all:
+
+~~~ruby
+SecretConfig.use(MyProvider.new, path: "/production/my_application")
+~~~
+
+If the provider needs an optional gem, require it inside a `begin`/`rescue LoadError` that re-raises
+with an install hint, the way the SSM provider does. That turns a missing dependency into a sentence
+telling the reader what to install.
+
+## Next steps
+
+* [Configuration](config): the rest of `SecretConfig.use`.
+* [Command Line](cli): importing into and exporting from either provider.
+* [Rails](rails): choosing a provider per environment.
+
+
+---
+
+<!-- source: docs/interpolation.md -->
+
+## Interpolation and Imports
+
+
+
+Values are not always literal. Secret Config understands two kinds of markup inside the store:
+
+* **`${...}` interpolation** substitutes something known only at runtime into a value: the host name,
+  the date, an environment variable.
+* **`__import__`** copies another subtree into a node, so that settings shared by several nodes are
+  written once.
+
+Both are evaluated when the registry is loaded and again on every `refresh!`, never when a key is read.
+Reads stay in-memory hash lookups no matter how much markup a value contains.
+
+Both can be turned off with `interpolate: false`. See [Configuration](config).
+
+## Step 1: Substitute an environment variable
+
+`${env:NAME}` reads an environment variable at load time:
+
+~~~yaml
+development:
+  mysql:
+    host: ${env:DB_HOST}
+~~~
+
+If `DB_HOST` is not set, loading raises `SecretConfig::MissingEnvironmentVariable`. Supply a fallback
+after a comma to make it optional:
+
+~~~yaml
+development:
+  mysql:
+    host: ${env:DB_HOST,127.0.0.1}
+~~~
+
+The default is stripped of surrounding spaces, and cannot itself contain a comma.
+
+This is not the same as the automatic
+[environment variable override](api#step-6-override-with-an-environment-variable), which applies to
+every key without being asked. `${env:...}` is explicit, names a variable that need not match the key,
+and can be embedded in a larger string:
+
+~~~yaml
+development:
+  mysql:
+    host: ${env:DB_HOST,127.0.0.1}:3306
+~~~
+
+## Step 2: Substitute the host or process
+
+~~~yaml
+development:
+  logger:
+    file_name: /var/log/my_application_${hostname}.log
+~~~
+
+Each process now writes to a file named after the machine it is on, from one shared setting.
+
+| Token | Value |
+| --- | --- |
+| `${hostname}` | Full host name |
+| `${hostname:short}` | Host name up to the first period |
+| `${pid}` | Process id |
+
+`${pid}` gives every process on a host its own file:
+
+~~~yaml
+development:
+  logger:
+    file_name: /var/log/my_application_${hostname:short}_${pid}.log
+~~~
+
+## Step 3: Substitute the date or time
+
+~~~yaml
+development:
+  logger:
+    file_name: /var/log/my_application_${date}.log
+    # => /var/log/my_application_20260808.log
+~~~
+
+| Token | Format |
+| --- | --- |
+| `${date}` | `%Y%m%d`, for example `20260808` |
+| `${date:format}` | Any [strftime](https://docs.ruby-lang.org/en/master/strftime_formatting_rdoc.html) format |
+| `${time}` | `%Y%m%d%H%M%S%L`, down to milliseconds |
+| `${time:format}` | Any strftime format |
+
+~~~yaml
+development:
+  logger:
+    file_name: /var/log/my_application_${date:%Y-%m-%d}.log
+    # => /var/log/my_application_2026-08-08.log
+~~~
+
+Note that these are evaluated at load time, not as the process runs. A process that starts before
+midnight and runs for a week keeps the date it started with, until it is refreshed or restarted.
+
+## Step 4: Substitute a random or selected value
+
+`${random}` produces a URL-safe random value of 32 bytes:
+
+~~~yaml
+development:
+  cache:
+    namespace: my_application_${random}
+~~~
+
+`${select:a,b,c}` picks one of the supplied values:
+
+~~~yaml
+development:
+  mongo:
+    primary: ${select:mongo1.example.net,mongo2.example.net,mongo3.example.net}
+~~~
+
+Each process picks its own, which spreads a fleet across several servers without coordinating anything.
+Values are separated by commas, are stripped of surrounding spaces, cannot contain a comma, and there
+must be at least two of them.
+
+**Both produce a new value on every restart and every refresh.** That makes them wrong for anything that
+has to stay stable. A password written as `${random}` becomes a different password every time the
+process starts, which is a locked-out application rather than a secure one.
+
+For a value that must be generated once and then kept, use the command line's `__generate__` token,
+which materializes the value during an import and writes it to the store. See
+[Command Line](cli).
+
+## Step 5: Escape a literal `${`
+
+A value that should contain `${...}` literally is escaped by doubling the dollar sign:
+
+~~~yaml
+development:
+  templates:
+    greeting: $${name}, welcome back
+    # => "${name}, welcome back"
+~~~
+
+Only `${` starts an interpolation. A bare `$`, or `$$` on its own, is left alone.
+
+## Step 6: Share settings with `__import__`
+
+A key named `__import__` copies the settings under another path into its parent node. It is useful when
+several nodes share most of their settings and differ in only a few:
+
+~~~yaml
+test:
+  my_application:
+    mongo:
+      database:  secret_config_test
+      primary:   127.0.0.1:27017
+      secondary: 127.0.0.1:27018
+
+    mongo_reporting:
+      __import__: mongo
+      primary:    reporting.example.net:27017
+~~~
+
+`mongo_reporting` ends up with `database` and `secondary` copied from `mongo`, and keeps its own
+`primary`. The `__import__` key itself is removed and never appears in the registry.
+
+How imports resolve:
+
+* **A relative value**, such as `mongo` above, is resolved against the root path of the registry, not
+  against the node doing the importing.
+* **An absolute value**, such as `/test/my_application/mongo`, is read from the provider directly, which
+  allows one application to import settings from a path outside its own root. Each absolute import is a
+  separate call to the provider, so they cost more than relative ones.
+* **An existing key always wins** over an imported one, which is what makes the `primary` override
+  above work.
+* **A path that itself contains an `__import__` can be imported.** It is resolved first, so the settings
+  it brings in are imported too, no matter which of the two nodes is declared first.
+* **Imports must not form a cycle.** Two nodes that import each other, or a node that imports itself,
+  raise `SecretConfig::ConfigurationError`, whether they refer to each other by relative or absolute
+  path. The error message lists the cycle.
+* **Imports are only applied when interpolation is enabled**, which is the default. The CLI leaves them
+  in place on export unless `--interpolate` is supplied, which is what keeps an export re-importable.
+
+The common use is a shared base path for a fleet of tenants, where each tenant imports the common
+settings and overrides the handful that are its own.
+
+## A setting that is both a value and a branch
+
+A node can have a value of its own and still have children under it. In AWS SSM Parameter Store this
+happens whenever both `/production/my_application/logger` and `/production/my_application/logger/level`
+exist as parameters.
+
+YAML cannot express that directly, so Secret Config uses the reserved key `__value__` for the value that
+belongs to the node itself:
+
+~~~yaml
+test:
+  my_application:
+    logger:
+      __value__: info
+      level:     debug
+~~~
+
+Read it as the node, not as `__value__`:
+
+~~~ruby
+SecretConfig.fetch("logger")
+# => "info"
+
+SecretConfig.fetch("logger/level")
+# => "debug"
+~~~
+
+`SecretConfig.configuration` and the CLI's `--export` render such nodes back out with `__value__`, so an
+export can be edited and imported again without losing the node's own value.
+
+## Reference
+
+All interpolation tokens:
+
+| Token | Result |
+| --- | --- |
+| `${date}` | Current date as `%Y%m%d` |
+| `${date:format}` | Current date in the supplied strftime format |
+| `${time}` | Current date and time as `%Y%m%d%H%M%S%L` |
+| `${time:format}` | Current date and time in the supplied strftime format |
+| `${env:name}` | The named environment variable. Raises `MissingEnvironmentVariable` when unset |
+| `${env:name,default}` | The named environment variable, or `default` when unset |
+| `${hostname}` | Full host name |
+| `${hostname:short}` | Host name up to the first period |
+| `${pid}` | Process id |
+| `${random}` | URL-safe random value, 32 bytes |
+| `${select:a,b,c}` | One of the supplied values, chosen at random |
+| `$${...}` | A literal `${...}`, not interpolated |
+
+Reserved keys:
+
+| Key | Meaning |
+| --- | --- |
+| `__import__` | Copy the settings at the given path into this node |
+| `__value__` | The value belonging to a node that also has children |
+| `__generate__` | Import-time random value. Handled by the [CLI](cli), not by interpolation |
+
+## Next steps
+
+* [Command Line](cli): `__generate__`, and how imports and exports treat this markup.
+* [Guide](api): reading the resulting values.
+* [Configuration](config): turning interpolation off.
+
+
+---
+
+<!-- source: docs/cli.md -->
+
+## Command Line
+
+
+
+`secret-config` manages the central store: importing settings into it, exporting them back out, diffing
+a candidate file against what is there, and editing individual keys.
+
+It talks to a provider directly rather than through the application's registry, so it works against any
+path without `SECRET_CONFIG_PATH` being set, and it does not load your application.
+
+Every command runs against either provider. `--provider file` works on a local YAML file with no AWS
+credentials, which is the best way to learn the tool and to rehearse an import before running it for
+real. The steps below start there and move to SSM at Step 4.
+
+## Step 1: Look at what is in a store
+
+Start with the file every Rails application already has:
+
+    secret-config --provider file --export /development
+
+With no `--file`, the export goes to stdout. Passwords and keys are masked as `[FILTERED]`, which is
+what makes this safe to paste into a ticket.
+
+To see the real values:
+
+    secret-config --provider file --export /development --no-filter
+
+`--provider file` reads `config/application.yml` by default. Point it elsewhere with
+`--provider-file`, which is separate from `--file`:
+
+    secret-config --provider file --provider-file config/settings.yml --export /development
+
+The default comes from the `SECRET_CONFIG_FILE_NAME` environment variable, then
+`config/application.yml`.
+
+## Step 2: Read, write and delete one key
+
+    secret-config --provider file --fetch /development/mysql/host
+    secret-config --provider file --set /development/mysql/host=localhost
+    secret-config --provider file --delete /development/mysql/host
+
+Note that these take **absolute** paths. The CLI has no root path of its own, unlike the application
+registry, so every key is given in full.
+
+`--set` splits on the first `=` only, so a value may contain more, which matters for base64 keys and
+initialization vectors:
+
+    secret-config --provider file --set /development/symmetric_encryption/key=QUJDREVG12345=
+
+To remove an entire subtree:
+
+    secret-config --provider file --delete-tree /development/mongo
+
+Writes rewrite the whole file from its parsed contents, so comments and formatting are lost, and a file
+containing ERB is refused rather than written. See [Providers](providers).
+
+## Step 3: Prepare a file for an environment
+
+To get settings into a production store, first write them as a YAML file. This looks like
+`application.yml` with one difference: it holds a single environment, so there is no `development` or
+`test` key at the top:
+
+~~~yaml
+mysql:
+  database: my_application_production
+  username: my_application
+  password: secret_configrules
+  host:     mysql_server.example.net
+
+mongo:
+  database:  my_application_production
+  primary:   mongo_primary.example.net:27017
+  secondary: mongo_secondary.example.net:27017
+
+secrets:
+  secret_key_base: somereallylongproductionstring
+~~~
+
+Rehearse the import against a local file first, which creates it if it does not exist:
+
+    secret-config --provider file --provider-file config/production_rehearsal.yml \
+      --import /production/my_application --file production.yml
+
+Then export it back to confirm it landed the way you expected:
+
+    secret-config --provider file --provider-file config/production_rehearsal.yml \
+      --export /production/my_application --no-filter
+
+## Step 4: Import into AWS SSM Parameter Store
+
+`--provider ssm` is the default, so it can be left off. This needs AWS credentials and the
+`aws-sdk-ssm` gem; see [Providers](providers).
+
+    secret-config --import /production/my_application --file production.yml
+
+Every value is written as an encrypted `SecureString`. To use a custom KMS key rather than the account
+default:
+
+    secret-config --import /production/my_application --file production.yml \
+      --key_id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+Or by alias:
+
+    secret-config --import /production/my_application --file production.yml --key_alias my_key_alias
+
+With no `--file`, the import reads stdin, so it composes with other tools:
+
+    my-secret-generator | secret-config --import /production/my_application
+
+## Step 5: Diff before importing
+
+Never import into a live environment without looking first:
+
+    secret-config --diff /production/my_application --file production.yml
+
+The output marks each difference:
+
+    + Adding a new key to the registry.
+    - The key will be removed from the registry during the import if --prune is specified.
+    * The value for that key will change during an import.
+
+By default an import only adds and updates. Keys in the store that are absent from the file are left
+alone. `--prune` removes them, making the store match the file exactly:
+
+    secret-config --import /production/my_application --file production.yml --prune
+
+Run the diff first, and read the `-` lines. That is the list `--prune` will delete.
+
+## Step 6: Export for review or backup
+
+    secret-config --export /production/my_application --file production.yml
+
+Filtered by default. Add `--no-filter` for the real values, which is what a backup needs:
+
+    secret-config --export /production/my_application --file production.yml --no-filter
+
+The format follows the file extension, so `.json` gives JSON:
+
+    secret-config --export /production/my_application --file production.json
+
+An export leaves `${...}` and `__import__` markup exactly as it is stored, which is what makes an
+export round-trip safely back through `--import`. Pass `--interpolate` to evaluate them instead, which
+produces a snapshot of what the application would actually see:
+
+    secret-config --export /production/my_application --file snapshot.yml --interpolate
+
+Do not import an interpolated export. It will replace shared imports with copies, and any `${random}`
+with one frozen value.
+
+## Step 7: Copy a path to spin up a tenant
+
+`--path` reads from another path in the store instead of a file, which copies a subtree:
+
+    secret-config --import /tenant73/my_application --path /production/my_application
+
+The usual pattern is to keep a "master" or "common" path holding the settings a new stack should start
+from, copy it, and then adjust the handful of values specific to the new tenant.
+
+A copy is literal: every value in the source, including its passwords, is written to the destination as
+it stands. To give each tenant its own credentials, see Step 8.
+
+`--path` works with `--diff` too, which answers "how does this tenant differ from the master copy":
+
+    secret-config --diff /tenant73/my_application --path /production/my_application
+
+## Step 8: Generate a password per tenant
+
+A new tenant should not share the passwords of the one it was copied from. Write `__generate__` as the
+value, and the import gives the destination a secure random value:
+
+~~~yaml
+mysql:
+  host:     mysql_server.example.net
+  password: __generate__
+~~~
+
+The value must be exactly `__generate__`, ignoring surrounding spaces.
+
+**Keep the template as a file, not as a path.** `__generate__` is materialized during the import, so the
+path it was imported into holds a real password from then on, and Step 7's path-to-path copy duplicates
+that password rather than generating a new one. Import the template file into each tenant instead:
+
+    secret-config --import /tenant73/my_application --file template.yml
+    secret-config --import /tenant74/my_application --file template.yml
+
+Those two tenants get different passwords, and share everything else the template specifies.
+
+Existing values are left alone, so re-running the import does not replace a password that was already
+generated. This holds under `--force` as well: forcing an import rewrites every key so that it is
+re-encrypted under a new KMS key, but it never regenerates a value that is already present.
+
+The default length is 32 bytes. Supply the size on the token to change it for that key alone:
+
+~~~yaml
+mysql:
+  password: __generate__        # 32 bytes
+  api_key:  __generate__:64     # 64 bytes
+~~~
+
+The size must be written tight against the colon. `__generate__: 64` is not valid YAML in a value
+position, since YAML reads the `: ` as the start of a nested mapping.
+
+A value that starts with `__generate__` but is neither of those two forms, such as `__generate__:abc` or
+`__generate__:0`, raises rather than being imported as a literal string, on the grounds that it is far
+more likely to be a typo than an intended value.
+
+### `__generate__` is not `${random}`
+
+Both produce a random value, and they behave very differently:
+
+* `__generate__` is materialized once, by the CLI, during an `--import`. The generated value is written
+  to the store and stays there.
+* `${random}` is a [string interpolation](interpolation). It is evaluated by the application every time
+  the registry is loaded or refreshed, so it produces a different value on every restart.
+
+Use `__generate__` for anything that has to stay the same after it is generated, such as a database
+password. `${random}` is only suitable for values that are genuinely disposable within a single process.
+
+## Step 9: Rotate a KMS key
+
+`--force` rewrites every key rather than only the changed ones, which re-encrypts the whole path under
+a new key:
+
+    secret-config --import /production/my_application --path /production/my_application \
+      --force --key_id "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
+
+Importing a path onto itself is deliberate here: nothing changes except the key the values are
+encrypted with. Generated values are preserved, as covered in Step 8.
+
+## Console
+
+    secret-config --console
+
+Intended to open an interactive Ruby session with the registry loaded, for exploring a store.
+
+**This currently raises `NameError: uninitialized constant SecretConfig::CLI::IRB`** on every provider,
+because IRB is no longer required. Until that is fixed, get the same thing from a plain IRB session:
+
+~~~ruby
+require "secret_config"
+SecretConfig.use(:file, path: "/development")
+SecretConfig.configuration
+~~~
+
+## Deprecated: `$(random)` and `--random_size`
+
+`__generate__` was previously spelled `$(random)`, which was too easily confused with the `${random}`
+interpolation. The old spelling still works, but prints a deprecation warning on stderr and will be
+removed in the next major release. It does not accept a per-key size.
+
+`--random_size` is deprecated alongside it. It set the size for every generated value in an import, so
+two keys needing different sizes meant two separate imports. `__generate__:size` replaces it and is set
+per key. The flag still works, and still sets the default for values written as a bare `__generate__`,
+but warns when supplied.
+
+Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress both warnings while migrating.
+
+## All options
+
+~~~
+secret-config [options]
+    -e, --export SOURCE_PATH         Export configuration. Use --file to specify the file name, otherwise stdout is used.
+    -i, --import TARGET_PATH         Import configuration. Use --file to specify the file name, --path for the SOURCE_PATH, otherwise stdin is used.
+        --diff TARGET_PATH           Compare configuration to this path. Use --file to specify the source file name, --path for the SOURCE_PATH, otherwise stdin is used.
+        --file FILE_NAME             Import/Export/Diff to/from this file.
+    -p, --path PATH                  Import/Export/Diff to/from this path.
+    -s, --set KEY=VALUE              Set one key to value. Example: --set mysql/database=localhost
+    -f, --fetch KEY                  Fetch the value for one setting. Example: --fetch mysql/database.
+    -d, --delete KEY                 Delete one specific key.
+    -r, --delete-tree PATH           Recursively delete all keys under the specified path.
+        --provider PROVIDER          Provider to use. [ssm | file]. Default: ssm
+        --provider-file FILE_NAME    For --provider file only. The config file to read and write. Default: $SECRET_CONFIG_FILE_NAME, then config/application.yml.
+        --key_id KEY_ID              For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key.
+        --key_alias KEY_ALIAS        For --import only. Encrypt config settings with this AWS KMS alias.
+        --no-filter                  For --export only. Do not filter passwords and keys.
+        --interpolate                For --export only. Evaluate string interpolation and __import__.
+        --prune                      For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import.
+        --force                      For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key.
+        --random_size INTEGER        Deprecated. For --import only. Default size in bytes to use when generating values when __generate__ is encountered in the source. Supply the size on each value instead, as __generate__:size. Default: 32
+    -c, --console                    Start interactive console.
+    -v, --version                    Display Secret Config version.
+    -h, --help                       Prints this help.
+~~~
+
+Note that `-f` is `--fetch`. `--file` has no short form.
+
+## Next steps
+
+* [Providers](providers): what each provider supports, and the IAM policy the CLI needs.
+* [Interpolation](interpolation): the markup that exports preserve.
+* [Rails](rails): deploying what you just imported.
+
+
+---
+
+<!-- source: docs/rails.md -->
+
+## Rails
+
+
+
+In a Rails application, Secret Config is set up once in `application.rb` and is then available to every
+initializer, every `.yml` file, and the application itself.
+
+The gem ships a railtie that exposes `config.secret_config`, which is the same `SecretConfig` singleton
+under a name that fits the Rails configuration style. No `require` is needed.
+
+## Step 1: Configure it in `application.rb`
+
+Add this as the **first** configuration item, directly under
+`class Application < Rails::Application`:
+
+~~~ruby
+module MyApp
+  class Application < Rails::Application
+    # Configure Secret Config before anything else, so that every configuration
+    # item below can read from it.
+    if Rails.env.development? || Rails.env.test?
+      # Read config/application.yml
+      config.secret_config.use :file
+    else
+      # Read from AWS SSM Parameter Store
+      config.secret_config.use :ssm, path: "/#{Rails.env}/my_app"
+    end
+
+    # ... the rest of the application configuration
+  end
+end
+~~~
+
+Order matters. Anything above this line cannot read a setting, and everything below it can.
+
+Note that the file provider is given no `path:`. Absent one it falls back to `RAILS_ENV`, then
+`Rails.env`, so `config/application.yml` is read under the current environment name. The SSM provider
+gets an explicit path, because the environment name alone is not specific enough to identify one
+application's configuration in a shared AWS account.
+
+`path` can always be overridden at deploy time with `SECRET_CONFIG_PATH`, which is what makes one image
+run in several environments. See [Configuration](config).
+
+## Step 2: Use a custom KMS key
+
+The account default key `alias/aws/ssm` works, but a key of your own can be rotated on its own
+schedule, which is generally what a compliance regime asks for:
+
+~~~ruby
+config.secret_config.use :ssm,
+  path:   "/#{Rails.env}/my_app",
+  key_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+~~~
+
+The key must exist before it is named here. See [Providers](providers) for `key_alias:`, retries, and
+the IAM policy the application needs.
+
+## Step 3: Convert `database.yml`
+
+Replace the credentials with calls to `fetch`. The three environments collapse into one block, because
+what differed between them has moved into the store:
+
+~~~yaml
+configuration: &configuration
+  encoding: utf8
+  adapter:  mysql2
+  database: <%= SecretConfig.fetch("mysql/database") %>
+  username: <%= SecretConfig.fetch("mysql/username") %>
+  password: <%= SecretConfig.fetch("mysql/password") %>
+  host:     <%= SecretConfig.fetch("mysql/host") %>
+  pool:     <%= SecretConfig.fetch("mysql/pool_size", type: :integer, default: 5) %>
+
+development:
+  <<: *configuration
+
+test:
+  <<: *configuration
+
+production:
+  <<: *configuration
+~~~
+
+Use `SecretConfig` rather than `config.secret_config` here. The `.yml` files are ERB-evaluated outside
+the application configuration block, where `config` is not in scope.
+
+## Step 4: Share one settings file across engines
+
+When several engines or private gems live in one repository, they can share a single development and
+test file rather than each carrying its own:
+
+~~~ruby
+config.secret_config.use :file, file_name: "../../../config/application.yml"
+~~~
+
+`file_name` is the path to the shared `config/application.yml`, relative to the engine.
+
+## Deployment
+
+### Containers
+
+Secret Config is at its best in a container. The configuration is outside the image, so the same image
+that passed testing is the one that goes to production, and the only thing that differs is the path it
+reads from.
+
+A container needs one environment variable:
+
+~~~shell
+export SECRET_CONFIG_PATH=/production/my_application
+~~~
+
+Rails itself usually wants `RAILS_ENV` as well, though Secret Config does not require it once
+`SECRET_CONFIG_PATH` is set:
+
+~~~shell
+export RAILS_ENV=production
+~~~
+
+That is the whole deployment configuration. No credentials in the image, no credentials in the task
+definition, and a developer can run the production image locally against a development path.
+
+To run the same image for a second tenant, change one variable:
+
+~~~shell
+export SECRET_CONFIG_PATH=/production/tenant73/my_application
+~~~
+
+### Refreshing without a deploy
+
+Because settings are read from the store rather than baked in, a value can be changed and picked up by
+running processes without a deploy. Wire `refresh!` to a signal on startup:
+
+~~~ruby
+Signal.trap("USR2") do
+  SecretConfig.refresh!
+end
+~~~
+
+See [Guide, Step 10](api#step-10-refresh-at-runtime).
+
+## Worked examples
+
+These are the `application.rb` blocks that come up most often. All of them go below the
+`config.secret_config.use` line from Step 1.
+
+### Logging
+
+With [Semantic Logger](https://logger.reidmorrison.com/), the whole logging setup becomes configuration:
+
+~~~ruby
+config.log_level                       = config.secret_config.fetch("logger/level", default: :info, type: :symbol)
+config.semantic_logger.backtrace_level = config.secret_config.fetch("logger/backtrace_level", default: :error, type: :symbol)
+config.semantic_logger.application     = config.secret_config.fetch("logger/application", default: "my_app")
+config.semantic_logger.environment     = config.secret_config.fetch("logger/environment", default: Rails.env)
+~~~
+
+The log level can now be raised in any environment by changing `logger/level` in the store, or with
+`export LOGGER_LEVEL=debug`, without a deploy.
+
+`logger/environment` is useful for identifying which tenant a log entry came from. It defaults to the
+Rails environment; set it to `tenant73` and every entry says so.
+
+For containers, send output to standard out so the platform can collect it:
+
+~~~ruby
+destination = config.secret_config.fetch("logger/destination", default: :file, type: :symbol)
+if destination == :stdout
+  STDOUT.sync                                    = true
+  config.rails_semantic_logger.add_file_appender = false
+  config.semantic_logger.add_appender(
+    io:        STDOUT,
+    level:     config.log_level,
+    formatter: config.secret_config.fetch("logger/formatter", default: :default, type: :symbol)
+  )
+end
+~~~
+
+Set `logger/destination` to `stdout` for plain output, and `logger/formatter` to `json` when feeding
+something that parses JSON. A developer running the same image locally sets `logger/destination` back to
+`file`.
+
+### Email
+
+~~~ruby
+application_url = config.secret_config.fetch("emails/asset_host")
+uri             = URI.parse(application_url)
+
+config.action_mailer.default_url_options   = {host: uri.host, protocol: uri.scheme}
+config.action_mailer.asset_host            = application_url
+config.action_mailer.smtp_settings         = {address: config.secret_config.fetch("emails/smtp/address", default: "localhost")}
+config.action_mailer.raise_delivery_errors = config.secret_config.fetch("emails/raise_delivery_errors", default: true, type: :boolean)
+~~~
+
+### Symmetric Encryption
+
+Encryption keys are binary, so they are stored base64-encoded and decoded on the way out:
+
+~~~ruby
+config.symmetric_encryption.cipher =
+  SymmetricEncryption::Cipher.new(
+    key:     config.secret_config.fetch("symmetric_encryption/key", encoding: :base64),
+    iv:      config.secret_config.fetch("symmetric_encryption/iv", encoding: :base64),
+    version: config.secret_config.fetch("symmetric_encryption/version", type: :integer)
+  )
+
+# Also support one prior encryption key version during key rotation
+if config.secret_config.key?("symmetric_encryption/old/key")
+  SymmetricEncryption.secondary_ciphers = [
+    SymmetricEncryption::Cipher.new(
+      key:     config.secret_config.fetch("symmetric_encryption/old/key", encoding: :base64),
+      iv:      config.secret_config.fetch("symmetric_encryption/old/iv", encoding: :base64),
+      version: config.secret_config.fetch("symmetric_encryption/old/version", type: :integer)
+    )
+  ]
+end
+~~~
+
+`config/symmetric-encryption.yml` can be deleted once the keys are in the store. Note the `key?` guard:
+the secondary cipher only exists during a rotation, which is exactly the case
+[`key?`](api#step-7-ask-whether-a-key-is-set) is for.
+
+To get the existing keys out of the old config file so they can be imported, run this in a console in
+each environment:
+
+~~~ruby
+require "yaml"
+require "base64"
+
+def se_config(cipher)
+  {
+    "key"     => Base64.strict_encode64(cipher.send(:key)),
+    "iv"      => Base64.strict_encode64(cipher.iv),
+    "version" => cipher.version
+  }
+end
+
+config = {"symmetric_encryption" => se_config(SymmetricEncryption.cipher)}
+if (cipher = SymmetricEncryption.secondary_ciphers.first)
+  config["symmetric_encryption"]["old"] = se_config(cipher)
+end
+puts config.to_yaml
+~~~
+
+Feed the output to `secret-config --import`. Note that a base64 value ends in `=`, which `--set`
+handles, but importing the file is easier than setting the keys one at a time. See
+[Command Line](cli).
+
+## Next steps
+
+* [Configuration](config): every `use` option and startup environment variable.
+* [Providers](providers): KMS keys, the IAM policy, and Parameter Store limits.
+* [Testing](testing): controlling settings from the test suite.
+
+
+---
+
+<!-- source: docs/testing.md -->
+
+## Testing
+
+
+
+Tests need two things from Secret Config: settings that are the same on every machine and in CI, and a
+way to change one setting for one test without disturbing the others.
+
+Both are covered here. Nothing on this page needs AWS.
+
+## Step 1: Give the test suite its own settings
+
+Add a `test` section to `config/application.yml`, alongside `development`:
+
+~~~yaml
+development:
+  mysql:
+    host:     127.0.0.1
+    database: my_application_development
+
+test:
+  mysql:
+    host:     127.0.0.1
+    database: my_application_test
+~~~
+
+Because the file is checked into source control, every developer and CI read the same values. There are
+no test credentials to distribute and nothing to set up on a new machine.
+
+In Rails this is already wired up by the `application.rb` block from the [Rails guide](rails), which
+uses the file provider for both `development` and `test` and picks the section from `Rails.env`.
+
+Outside Rails, point at it in your test helper:
+
+~~~ruby
+require "secret_config"
+
+SecretConfig.use(:file, path: "/test")
+~~~
+
+## Step 2: Override one setting for one test
+
+The simplest override is an environment variable, since it needs no knowledge of Secret Config at all:
+
+~~~ruby
+def test_connects_to_the_replica
+  ENV["MYSQL_HOST"] = "replica.example.net"
+  SecretConfig.refresh!
+
+  assert_equal "replica.example.net", SecretConfig.fetch("mysql/host")
+ensure
+  ENV.delete("MYSQL_HOST")
+  SecretConfig.refresh!
+end
+~~~
+
+The `refresh!` calls matter. An override of a key that exists in the store is applied when the registry
+is loaded, so setting the variable mid-process does nothing until the registry is re-read. See
+[Guide, Step 6](api#step-6-override-with-an-environment-variable).
+
+For a key that is **not** in the store, no refresh is needed, because such a key is read from the
+environment on every lookup:
+
+~~~ruby
+def test_uses_the_feature_flag
+  ENV["FEATURES_NEW_CHECKOUT"] = "true"
+
+  assert SecretConfig.fetch("features/new_checkout", type: :boolean)
+ensure
+  ENV.delete("FEATURES_NEW_CHECKOUT")
+end
+~~~
+
+## Step 3: Set a value directly
+
+`set` writes to the store. Against the file provider that rewrites `config/application.yml`, which is
+not what you want from a test, so this is only appropriate with the in-memory provider from Step 4.
+
+Within a test that already uses one:
+
+~~~ruby
+SecretConfig["mysql/host"] = "replica.example.net"
+
+assert_equal "replica.example.net", SecretConfig.fetch("mysql/host")
+~~~
+
+## Step 4: Use an in-memory store
+
+For full control, and to keep tests off the filesystem entirely, use a provider that holds everything in
+a Hash. Any object answering `each`, `fetch`, `set` and `delete` works, and can be passed to `use`
+directly without registering it:
+
+~~~ruby
+class InMemoryProvider < SecretConfig::Providers::Provider
+  attr_reader :hash
+
+  def initialize(hash = {})
+    super()
+    @hash = hash.dup
+  end
+
+  def each(path)
+    hash.each_pair { |key, value| yield(key, value) if key.start_with?(path) }
+  end
+
+  def set(key, value)
+    hash[key] = value.to_s
+  end
+
+  def delete(key)
+    hash.delete(key)
+  end
+
+  def fetch(key)
+    hash[key]
+  end
+end
+~~~
+
+Keys are **absolute**, because that is what providers deal in. The registry strips its root path before
+caching:
+
+~~~ruby
+provider = InMemoryProvider.new(
+  "/test/my_application/mysql/host"     => "127.0.0.1",
+  "/test/my_application/mysql/database" => "my_application_test"
+)
+
+SecretConfig.use(provider, path: "/test/my_application")
+
+SecretConfig.fetch("mysql/host")
+# => "127.0.0.1"
+~~~
+
+Now a test can set anything it likes, including keys that do not exist in the real configuration, and
+nothing touches a file.
+
+## Step 5: Restore between tests
+
+`SecretConfig.use` replaces the registry outright, so a test that calls it changes global state for
+everything after it. Put the suite back the way it was:
+
+~~~ruby
+class ActiveSupport::TestCase
+  def with_settings(settings)
+    provider = InMemoryProvider.new(settings)
+    SecretConfig.use(provider, path: "/test/my_application")
+    yield
+  ensure
+    SecretConfig.use(:file, path: "/test")
+  end
+end
+~~~
+
+Used as:
+
+~~~ruby
+def test_falls_back_when_the_replica_is_missing
+  with_settings("/test/my_application/mysql/host" => "primary.example.net") do
+    assert_equal "primary.example.net", MyApp.database_host
+  end
+end
+~~~
+
+Restoring in an `ensure` rather than a teardown keeps the swap scoped to the block, which survives a
+failing assertion.
+
+## Testing code that reads settings
+
+Application code should read settings where it uses them rather than caching them, which is the same
+advice that makes [`refresh!`](api#step-10-refresh-at-runtime) work. It also makes the code testable:
+
+~~~ruby
+# Testable: the block above can change this between calls.
+def pool_size
+  SecretConfig.fetch("mysql/pool_size", type: :integer)
+end
+
+# Not testable: frozen when the file was loaded, before any test ran.
+POOL_SIZE = SecretConfig.fetch("mysql/pool_size", type: :integer)
+~~~
+
+## Asserting on what is configured
+
+`configuration` returns the whole tree, which is useful for asserting that a deployment has everything
+it needs:
+
+~~~ruby
+def test_every_required_setting_is_present
+  %w[mysql/host mysql/database mysql/username secrets/secret_key_base].each do |key|
+    assert SecretConfig.key?(key), "Missing required setting: #{key}"
+  end
+end
+~~~
+
+A test like this belongs in the suite because it catches a missing key at build time rather than at
+startup in production. Note that it passes when a key is supplied only by an environment variable, since
+that is what [`key?`](api#step-7-ask-whether-a-key-is-set) answers.
+
+## Next steps
+
+* [Guide](api): the interface being tested.
+* [Providers](providers): writing a provider, in more detail.
+* [Configuration](config): swapping providers outside of tests.
+
+
+---
+
+<!-- source: docs/upgrading.md -->
+
+## Upgrading
+
+
+
+This page covers what changes between major versions and what to do about it. The full record, including
+every non-breaking change, is in
+[CHANGELOG.md](https://github.com/reidmorrison/secret_config/blob/master/CHANGELOG.md).
+
+Secret Config follows [Semantic Versioning](https://semver.org/). Breaking changes are confined to major
+releases: within a minor or patch release the meaning of a key, the return type of a call, the default
+value of an option, and the supported Ruby version all stay put.
+
+## Upgrading to v2
+
+v2 is where the accumulated breaking changes land. None of them require a change to how settings are
+stored, so the store itself does not need to be migrated. The work is in application code.
+
+### Ruby 3.2 is the minimum
+
+The gemspec previously declared Ruby 2.3, but CI has only ever tested 3.2 and later. This makes the
+supported version match what is actually tested.
+
+### `key?` now consults environment variables
+
+`key?` read the in-memory cache directly, which meant it disagreed with `[]` and `fetch`, both of which
+have always honored an environment variable override. It now returns `true` for a key that is supplied
+only by an environment variable, whenever `SecretConfig.check_env_var?` is true.
+
+~~~shell
+export MYSQL_REPLICA_HOST=replica.example.net
+~~~
+
+~~~ruby
+SecretConfig.key?("mysql/replica_host")
+# v1: false
+# v2: true
+~~~
+
+**What to do:** code that used `key?` to ask specifically whether the *central store* holds a key gets a
+different answer now. Set `SecretConfig.check_env_var = false` to restore the old meaning.
+
+Most uses are unaffected, because most are asking "is a value available", which is what it now answers.
+
+### Env-var-only keys are no longer cached
+
+Reading a key that exists only as an environment variable used to write it into the in-memory copy.
+That had two consequences: `key?` changed its answer partway through a process, and the key leaked into
+`configuration` output once anything had read it.
+
+The memoization is gone. Two things follow:
+
+* A change to an environment variable that has **no matching key in the store** now takes effect on the
+  next read, rather than being pinned to whatever was seen the first time.
+* Such a key no longer appears in `SecretConfig.configuration`.
+
+Overrides of keys that *are* in the store are still applied at load time, so those still need a
+`refresh!` to pick up a change. That has not changed.
+
+**What to do:** usually nothing. Code that relied on reading an env-var-only key to make it show up in
+`configuration` needs another approach.
+
+### `fetch` calls a block even without a `default:`
+
+The missing-key check ran before the block was considered, so a block on its own raised
+`MissingMandatoryKey` and was only ever reached when a `default:` was also supplied, which it then took
+precedence over. The block is now called whenever the key is missing:
+
+~~~ruby
+SecretConfig.fetch("mysql/port") { 3306 }
+# v1: raises MissingMandatoryKey
+# v2: 3306
+~~~
+
+**What to do:** code that relies on `fetch(key) { ... }` raising must drop the block to keep raising.
+This is worth grepping for, since v1 code would only have written a bare block by mistake.
+
+### `$(random)` is renamed to `__generate__`
+
+A single character separated `$(random)` from the `${random}` interpolation, and the two behave very
+differently: `$(random)` is materialized once during a CLI import and persisted, whereas `${random}` is
+re-evaluated on every startup and refresh. Confusing them produces an application whose password
+changes on every restart.
+
+~~~yaml
+# Before
+mysql:
+  password: $(random)
+
+# After
+mysql:
+  password: __generate__
+~~~
+
+`$(random)` still works in v2, but prints a deprecation warning on stderr and will be removed in the
+next major release. It does not accept a per-key size.
+
+### `--random_size` is deprecated
+
+It set one size for every generated value in an import, so two keys needing different sizes meant two
+separate imports. Supply the size on the value instead:
+
+~~~yaml
+mysql:
+  password: __generate__        # 32 bytes
+  api_key:  __generate__:64     # 64 bytes
+~~~
+
+The flag still works, and still sets the default for a bare `__generate__`, but warns when supplied.
+
+### Silencing the deprecation warnings
+
+While migrating, set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress both warnings:
+
+~~~shell
+export SECRET_CONFIG_SILENCE_DEPRECATIONS=1
+~~~
+
+### New in v2
+
+Not breaking, but worth adopting:
+
+* **`secret-config --provider file`** works for every command except `--console`, so imports, exports and
+  diffs can be run against a local YAML file with no AWS credentials. See [Command Line](cli).
+* **`Providers::File` is writable.** `set` and `delete` work against a file, and a file no longer has to
+  exist before it is used. See [Providers](providers).
+* **`SECRET_CONFIG_FILE_NAME`** selects the file the file provider reads and writes, which previously
+  could not be changed when the provider was selected by environment variable.
+* **`interpolate:`** is accepted by `SecretConfig.use`, having previously been reachable only by
+  constructing a `Registry` directly.
+* **Circular `__import__` raises `ConfigurationError`** with the cycle in the message, rather than
+  overflowing the stack, and an `__import__` of a node that is itself an import now resolves regardless
+  of declaration order.
+
+## Upgrading to v1.0
+
+No breaking changes. v1.0.0 fixed the handling of a `nil` default on `fetch`.
+
+## Upgrading to v0.10
+
+### `${...}` replaces `%{...}`
+
+String interpolation changed from `%` to `$`. Change every interpolated value **before** upgrading,
+since the old form is not recognized afterwards:
+
+~~~yaml
+# Before
+logger:
+  file_name: /var/log/my_application_%{date}.log
+
+# After
+logger:
+  file_name: /var/log/my_application_${date}.log
+~~~
+
+An export, a search and replace, and an import is the quickest way through it for a store of any size.
+See [Command Line](cli).
+
+## Upgrading to v0.9
+
+### The command line program was renamed
+
+`secret_config` became `secret-config`, with an underscore changed to a hyphen, and its arguments were
+reworked to be consistent across operations. Any script or runbook calling the old name needs updating,
+and the arguments should be checked rather than assumed:
+
+    secret-config --help
+
+## Next steps
+
+* [Command Line](cli): the current CLI, including `__generate__`.
+* [Guide](api): the current programming interface.
+* [CHANGELOG.md](https://github.com/reidmorrison/secret_config/blob/master/CHANGELOG.md): the complete
+  record.
