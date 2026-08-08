@@ -186,8 +186,8 @@ touches AWS and runs everywhere; use it for new SSM coverage.
 [test/providers/ssm_test.rb](test/providers/ssm_test.rb) does a live round trip and skips unless
 `AWS_ACCESS_KEY_ID` is set, which is the source of the suite's 2 skips.
 
-Some tests deliberately assert current, undesired behavior (the `--set` truncation and the `-f` collision
-in [test/cli_test.rb](test/cli_test.rb), the `fetch` block precedence in
+Some tests deliberately assert current, undesired behavior (the `--provider file` rejection in
+[test/cli_test.rb](test/cli_test.rb), the `fetch` block precedence in
 [test/registry_test.rb](test/registry_test.rb)). They carry a comment pointing at
 [TECH_DEBT.md](TECH_DEBT.md); update them when fixing the underlying issue rather than treating a failure
 there as a regression.
