@@ -49,6 +49,16 @@ module SecretConfig
       hash
     end
 
+    # Sorts a nested hash by key, in place, at every level.
+    # Keeps exports, imports and diffs in a stable order regardless of the order the provider yields.
+    def self.sort_by_key!(hash)
+      hash.keys.sort.each do |key|
+        value = hash[key] = hash.delete(key)
+        sort_by_key!(value) if value.is_a?(Hash)
+      end
+      hash
+    end
+
     def self.constantize_symbol(symbol, namespace = "SecretConfig::Providers")
       klass = "#{namespace}::#{camelize(symbol.to_s)}"
       begin

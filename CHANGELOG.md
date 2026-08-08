@@ -109,8 +109,15 @@ Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress these warnings
 ### Development
 
 - Add rubocop, with the `rubocop-minitest` and `rubocop-rake` plugins, to the default rake task and CI.
-- Add SimpleCov, and raise test coverage from 57% to 96%.
+- Add SimpleCov, and raise test coverage from 57% to 98%.
 - Add Ruby 4.0 to the CI matrix.
+- Split `SecretConfig::CLI` into `CLI::Options` (argument parsing), `CLI::ConfigFile` (the YAML or JSON
+  file that `--export`, `--import` and `--diff` transfer to or from), `CLI::Differ` and `CLI::Importer`,
+  leaving the command dispatch behind. The `Metrics` rubocop cops no longer exclude `cli.rb`. `CLI` still
+  answers every option as a reader, and `Utils.sort_by_key!` is the one method the split promoted to a
+  shared helper. The unused `copy_path`, `diff_path` and `import_path` readers, which no option ever set,
+  are removed.
+- Remove `TECH_DEBT.md`. Every item it tracked has been worked through, and each one is recorded above.
 
 ## [1.0.0] - 2022-03-11
 

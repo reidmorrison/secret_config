@@ -43,21 +43,14 @@ Layout/LineLength:
 Layout/SpaceInsideHashLiteralBraces:
   EnforcedStyle: no_space
 
-# The Metrics cops exclude cli.rb throughout. It is a single large OptionParser driven class whose
-# command implementations have no test coverage, so it is not safe to refactor for the sake of the
-# metrics. See TECH_DEBT.md.
-
 # TODO: Soften Limits for phase 1 only
 Metrics/AbcSize:
   Max: 40
-  Exclude:
-    - "**/*/cli.rb"
 
 # Support long block lengths for tests
 Metrics/BlockLength:
   Exclude:
     - "test/**/*"
-    - "**/*/cli.rb"
   AllowedMethods:
     - "aasm"
     - "included"
@@ -67,19 +60,14 @@ Metrics/ClassLength:
   Max: 250
   Exclude:
     - "test/**/*"
-    - "**/*/cli.rb"
 
 # TODO: Soften Limits for phase 1 only
 Metrics/CyclomaticComplexity:
   Max: 15
-  Exclude:
-    - "**/*/cli.rb"
 
 # Soften limits
 Metrics/MethodLength:
   Max: 50
-  Exclude:
-    - "**/*/cli.rb"
 
 # Soften limits
 Metrics/ModuleLength:

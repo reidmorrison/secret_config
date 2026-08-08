@@ -11,8 +11,9 @@ in-memory cache at startup, and serves it through a global `SecretConfig` single
 
 Docs source lives in [docs/](docs/) (Jekyll site published to https://config.reidmorrison.com/).
 
-Known issues and open design questions are tracked in [TECH_DEBT.md](TECH_DEBT.md). Check it before
-"fixing" surprising behavior, and add to it when a review turns up something that is not being fixed now.
+There are no known issues or open design questions outstanding. The `TECH_DEBT.md` that tracked them is
+gone, having been worked through; [CHANGELOG.md](CHANGELOG.md) carries what came of each item. If a review
+turns up something that is not being fixed now, raise it rather than leaving it undocumented.
 
 ## Git workflow
 
@@ -30,8 +31,8 @@ default value of an existing option, or the supported Ruby floor.
 When a fix would change observable behavior, say so explicitly and let the maintainer decide whether it
 waits for the next major release rather than folding it in silently.
 
-The current version is 1.0.0. **A v2 release is planned to carry the pending changes in
-[TECH_DEBT.md](TECH_DEBT.md)**, several of which are deliberately breaking. Target that work at v2 rather
+The current version is 1.0.0. **A v2 release is planned to carry the unreleased changes in
+[CHANGELOG.md](CHANGELOG.md)**, several of which are deliberately breaking. Target that work at v2 rather
 than shipping it in a 1.x release.
 
 ## Commands
@@ -65,14 +66,14 @@ rubocop is not repeated on every matrix entry; `TargetRubyVersion` decides which
 result does not depend on the Ruby it runs on.
 
 SimpleCov runs on every test run and writes `coverage/index.html` (gitignored). No minimum threshold is
-enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set deliberately: `cli.rb` and
+enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set deliberately: the `cli/` files and
 `railtie.rb` are autoloaded, and without it they are omitted from the report rather than counted as
 uncovered, which inflates the total. (`cover` replaced the equivalent `track_files`, which SimpleCov now
 deprecates. The reported totals were identical either way.)
 
-The baseline is 96.00% line / 85.87% branch. Every file is at 100% except `cli.rb` (92.0%, the uncovered
-parts are `--console`, the SSM branches of `#provider_instance`, and the stdin/stdout ends of `read_file`
-and `write_file`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback), and
+The baseline is 98.23% line / 89.88% branch. Every file is at 100% except `cli.rb` (93.4%, the uncovered
+parts are `--console` and the SSM branches of `#provider_instance`, neither of which runs without AWS
+credentials or `irb`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback), and
 `providers/ssm.rb` (97.3%, the uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`).
 `railtie.rb` and `version.rb` report 0% for structural reasons: the railtie is only loaded under Rails, and
 the gemspec loads `version.rb` before SimpleCov starts.
@@ -89,13 +90,11 @@ Rubocop is bundled, with `rubocop-minitest` and `rubocop-rake` loaded as plugins
 The style it encodes: double-quoted strings, trailing dot position, table-aligned hashes and assignments,
 128-character lines.
 
-Rubocop reports no offenses. Keep it that way rather than accumulating a backlog. Two suppressions are
-deliberate and documented in place:
+Rubocop reports no offenses. Keep it that way rather than accumulating a backlog. No cop is excluded for a
+file that cannot be brought into line; the one deliberate suppression is documented in place:
 
 - `Naming/PredicateMethod` is disabled inline on `Registry#refresh!`, which returns `true` but cannot be
   renamed because it is public API delegated from `SecretConfig.refresh!`.
-- The `Metrics/*` cops exclude `cli.rb`. The exclusions predate its test coverage and are now removable;
-  splitting the class is the outstanding work. See [TECH_DEBT.md](TECH_DEBT.md).
 
 ## Architecture
 
@@ -169,12 +168,23 @@ falls back to `RAILS_ENV` then `Rails.env`.
 
 ### CLI
 
-[lib/secret_config/cli.rb](lib/secret_config/cli.rb) is a self-contained `OptionParser` front end that talks
-to a provider directly rather than through the global registry, so it can operate on any path without
-`SECRET_CONFIG_PATH` being set. `CLI#provider_instance` builds `:ssm` and `:file`, and raises
+The CLI talks to a provider directly rather than through the global registry, so it can operate on any path
+without `SECRET_CONFIG_PATH` being set. `CLI#provider_instance` builds `:ssm` and `:file`, and raises
 `ArgumentError` for anything else. Exports filter secrets by default (`--no-filter` to disable) and leave
 `${...}` uninterpolated unless `--interpolate` is passed, which keeps round-tripping an export back through
 `--import` non-destructive.
+
+    CLI                 dispatch, and the reporting that goes with each command
+      ├── Options       the OptionParser and the options it sets; CLI delegates a reader for each
+      ├── ConfigFile    the YAML or JSON file --export/--import/--diff transfer to or from
+      ├── Differ        renders the difference between two flat hashes
+      └── Importer      writes a config tree through the provider, resolving __generate__ tokens
+
+Each lives in [lib/secret_config/cli/](lib/secret_config/cli/) and is autoloaded from `CLI`. Adding an
+option means adding it to one of `Options`' `define_*_options` methods and to the `def_delegators` list in
+[cli.rb](lib/secret_config/cli.rb). `Importer` is handed the current values rather than reading them, so
+that a provider is all it needs; `CLI#current_values` is what supplies them, and what turns a store that
+does not exist yet into an empty one.
 
 Two file options that are easily confused: `--file` is what `--export`/`--import`/`--diff` transfer to or
 from, while `--provider-file` is the store that `--provider file` reads and writes. `--provider file` makes
@@ -203,15 +213,19 @@ key/value hash in memory, which is convenient when a test wants to assert on exa
 `Providers::File` is also writable now, so tests that need a real round trip copy the fixture into a
 `Dir.mktmpdir` and point `--provider-file` at the copy rather than mutating `test/config/application.yml`.
 
+[test/cli_test.rb](test/cli_test.rb) covers option parsing and drives each command end to end against the
+file provider. [test/cli/importer_test.rb](test/cli/importer_test.rb) covers `CLI::Importer` on its own,
+against an `InMemoryProvider`, since deciding what to write is where the behavior worth pinning down is.
+
 There are two SSM test files. [test/providers/ssm_stubbed_test.rb](test/providers/ssm_stubbed_test.rb)
 passes `stub_responses: true` and `region:` through `Ssm#initialize` into `Aws::SSM::Client`, so it never
 touches AWS and runs everywhere; use it for new SSM coverage.
 [test/providers/ssm_test.rb](test/providers/ssm_test.rb) does a live round trip and skips unless
 `AWS_ACCESS_KEY_ID` is set, which is the source of the suite's 2 skips.
 
-A test that deliberately asserts current, undesired behavior carries a comment pointing at
-[TECH_DEBT.md](TECH_DEBT.md); update it when fixing the underlying issue rather than treating a failure
-there as a regression. There are none at present.
+A test that deliberately asserts current, undesired behavior carries a comment saying so, and says what
+the desired behavior is; update it when fixing the underlying issue rather than treating a failure there
+as a regression. There are none at present.
 
 [test/test_helper.rb](test/test_helper.rb) requires `cgi/escape` before `amazing_print` on purpose: Ruby 4.0
 removed `cgi` from stdlib and the shim warns if loaded reentrantly. Keep that require first.

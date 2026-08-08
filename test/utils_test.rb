@@ -61,6 +61,22 @@ class UtilsTest < Minitest::Test
       end
     end
 
+    describe ".sort_by_key!" do
+      it "sorts every level of the hash" do
+        hash = {"mysql" => {"port" => "3306", "host" => "127.0.0.1"}, "mongo" => {"primary" => "localhost"}}
+
+        assert_equal %w[mongo mysql], SecretConfig::Utils.sort_by_key!(hash).keys
+        assert_equal %w[host port], hash["mysql"].keys
+      end
+
+      it "sorts in place, returning the same hash" do
+        hash = {"b" => "1", "a" => "2"}
+
+        assert_same hash, SecretConfig::Utils.sort_by_key!(hash)
+        assert_equal %w[a b], hash.keys
+      end
+    end
+
     describe ".constantize_symbol" do
       it "resolves a provider symbol to its class" do
         assert_equal SecretConfig::Providers::File, SecretConfig::Utils.constantize_symbol(:file)
