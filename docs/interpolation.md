@@ -106,13 +106,16 @@ midnight and runs for a week keeps the date it started with, until it is refresh
 
 ## Step 4: Substitute a random or selected value
 
-`${random}` produces a URL-safe random value of 32 bytes:
+`${random}` produces a URL-safe random value of 32 bytes. `${random:size}` sets the size:
 
 ~~~yaml
 development:
   cache:
-    namespace: my_application_${random}
+    namespace: my_application_${random:8}
 ~~~
+
+The size must be a positive integer. Anything else, such as `${random:abc}`, raises
+`SecretConfig::ConfigurationError` rather than quietly generating nothing.
 
 `${select:a,b,c}` picks one of the supplied values:
 
@@ -234,6 +237,7 @@ All interpolation tokens:
 | `${hostname:short}` | Host name up to the first period |
 | `${pid}` | Process id |
 | `${random}` | URL-safe random value, 32 bytes |
+| `${random:size}` | URL-safe random value of `size` bytes |
 | `${select:a,b,c}` | One of the supplied values, chosen at random |
 | `$${...}` | A literal `${...}`, not interpolated |
 

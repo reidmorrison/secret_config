@@ -1,5 +1,4 @@
 require "forwardable"
-# require "irb"
 
 module SecretConfig
   # Command line front end for the central store.
@@ -146,7 +145,16 @@ module SecretConfig
       Differ.display(target, source)
     end
 
+    # IRB is required here rather than at the top of the file because it stops being a default gem in
+    # Ruby 4.0. An unconditional require warns under bundler now, and fails there once it has to be
+    # declared, which would break every other command for the sake of this one.
     def run_console
+      begin
+        require "irb"
+      rescue LoadError => e
+        raise(LoadError, "Add gem 'irb' to use `secret-config --console`: #{e.message}")
+      end
+
       IRB.start
     end
 

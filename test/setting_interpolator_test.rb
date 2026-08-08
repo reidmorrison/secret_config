@@ -150,23 +150,35 @@ module SecretConfig
       end
 
       describe "#random" do
+        # Deliberately not stubbing `SecureRandom.urlsafe_base64` here. A stub swallows the argument,
+        # which is what previously hid `${random:size}` passing it a String that SecureRandom rejects.
         it "interpolates random 32 byte string" do
-          string = "${random}"
-          random = SecureRandom.urlsafe_base64(32)
-          SecureRandom.stub(:urlsafe_base64, random) do
-            actual = interpolator.parse(string)
+          actual = interpolator.parse("${random}")
 
-            assert_equal random, actual, string
-          end
+          assert_equal SecureRandom.urlsafe_base64(32).length, actual.length
         end
 
         it "interpolates custom length random string" do
-          string = "${random:64}"
-          random = SecureRandom.urlsafe_base64(64)
-          SecureRandom.stub(:urlsafe_base64, random) do
-            actual = interpolator.parse(string)
+          actual = interpolator.parse("${random:64}")
 
-            assert_equal random, actual, string
+          assert_equal SecureRandom.urlsafe_base64(64).length, actual.length
+        end
+
+        it "generates a different value each time" do
+          refute_equal interpolator.parse("${random}"), interpolator.parse("${random}")
+        end
+
+        it "fails when the size is not a number" do
+          error = assert_raises SecretConfig::ConfigurationError do
+            interpolator.parse("${random:abc}")
+          end
+
+          assert_includes error.message, "positive integer"
+        end
+
+        it "fails when the size is not positive" do
+          assert_raises SecretConfig::ConfigurationError do
+            interpolator.parse("${random:0}")
           end
         end
       end
