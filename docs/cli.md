@@ -19,6 +19,7 @@ secret-config [options]
     -r, --delete-tree PATH           Recursively delete all keys under the specified path.
     -c, --console                    Start interactive console.
         --provider PROVIDER          Provider to use. [ssm | file]. Default: ssm
+        --provider-file FILE_NAME    For --provider file only. The config file to read and write. Default: $SECRET_CONFIG_FILE_NAME, then config/application.yml.
         --no-filter                  For --export only. Do not filter passwords and keys.
         --interpolate                For --export only. Evaluate string interpolation and __import__.
         --prune                      For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import.
@@ -97,6 +98,39 @@ Export from a path in AWS SSM Parameter Store to a yaml file, _without_ filterin
 Export from a path in AWS SSM Parameter Store to a json file, where passwords are filtered:
 
     secret-config --export /production/my_application --file production.json 
+
+#### Working with a local file instead of AWS
+
+Every command above also runs against a local YAML file, with `--provider file`. No AWS credentials
+are needed, which makes it useful for inspecting or editing `config/application.yml` directly, and for
+trying out an import before running it against SSM.
+
+The file is the store, in the same way that the parameter tree is the store for SSM, so paths address
+locations inside it. Point at the file with `--provider-file`; the default is the
+`SECRET_CONFIG_FILE_NAME` environment variable, then `config/application.yml`.
+
+Fetch, set and delete a single key:
+
+    secret-config --provider file --fetch /test/my_application/mysql/host
+    secret-config --provider file --set /test/my_application/mysql/host=localhost
+    secret-config --provider file --delete /test/my_application/mysql/host
+
+Diff a candidate file against what is already in the store:
+
+    secret-config --provider file --provider-file config/application.yml --diff /test/my_application --file candidate.yml
+
+Import into a file that does not exist yet, which creates it:
+
+    secret-config --provider file --provider-file config/new_application.yml --import /production/my_application --file production.yml
+
+Because both paths live inside one file, `--path` diffs or copies one environment onto another
+without leaving the file:
+
+    secret-config --provider file --diff /production/my_application --path /test/my_application
+
+Writes rewrite the whole file from its parsed contents, so comments and formatting are not preserved.
+A file containing ERB is refused rather than written, since rewriting it would replace the ERB with
+whatever it evaluated to and silently turn a template into a literal. Edit those files directly.
 
 #### Copy values between paths in AWS SSM parameter store
 

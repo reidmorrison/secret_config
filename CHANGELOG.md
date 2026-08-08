@@ -36,6 +36,26 @@ Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress these warnings
   `__generate__:abc` or `__generate__:0`, now raises rather than being imported as a literal string.
 - Documentation for `__import__` and `__value__` in the
   [Guide](https://config.reidmorrison.com/guide.html).
+- `secret-config --provider file` now works. `--provider`'s help text has always advertised
+  `[ssm | file]`, but only `ssm` was ever built, so anything else raised
+  `ArgumentError: Invalid provider`. Every command except `--console` now runs against a local YAML
+  file with no AWS credentials, which makes it possible to inspect or edit `config/application.yml`
+  directly, and to rehearse an import before running it against SSM.
+- `--provider-file FILE_NAME` selects the file that `--provider file` reads and writes. It is separate
+  from `--file`, which remains the file that `--export`, `--import` and `--diff` transfer to or from.
+  It defaults to the new `SECRET_CONFIG_FILE_NAME` environment variable, then `config/application.yml`.
+- `SECRET_CONFIG_FILE_NAME` sets the file that `Providers::File` reads and writes. With
+  `SECRET_CONFIG_PROVIDER=file` there was previously no way to change it from `config/application.yml`.
+  An explicit `file_name:` argument still wins.
+- `Providers::File#set` and `#delete` are implemented, so the file provider is writable. A key that is
+  both a value and a node keeps its own value under `__value__`, and a delete prunes the nodes it
+  leaves empty. Writes rewrite the file from its parsed contents, so comments and formatting are lost,
+  and a file containing ERB is refused rather than written, since rewriting it would silently replace
+  the ERB with its evaluated result.
+- `Providers::File` no longer requires the file to exist before it is constructed. Reads still raise
+  `ConfigurationError` when it is missing, writes create it, so `--import` can bootstrap a new store.
+  `SecretConfig.use(:file)` fails at the same point as before, since `Registry#refresh!` reads
+  immediately.
 
 ### Fixed
 
@@ -54,6 +74,9 @@ Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress these warnings
   nodes are declared in. Previously the unresolved `__import__` key was copied across instead of the
   settings behind it, leaving a reserved key visible in the registry. Circular imports raise
   `SecretConfig::ConfigurationError` rather than recursing.
+- `Providers::File#fetch` returns the value of a key that is both a value and a node, rather than
+  `nil`. Such a key holds its own value under `__value__`, which is what `#each` has always yielded
+  for it, so the two disagreed. A key that is only a node still returns `nil`.
 
 ### Changed
 
@@ -65,7 +88,7 @@ Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress these warnings
 ### Development
 
 - Add rubocop, with the `rubocop-minitest` and `rubocop-rake` plugins, to the default rake task and CI.
-- Add SimpleCov, and raise test coverage from 57% to 77%.
+- Add SimpleCov, and raise test coverage from 57% to 96%.
 - Add Ruby 4.0 to the CI matrix.
 
 ## [1.0.0] - 2022-03-11

@@ -26,7 +26,7 @@ module SecretConfig
       ADD    = "\e[32m".freeze
     end
 
-    attr_reader :path, :provider, :file_name,
+    attr_reader :path, :provider, :file_name, :provider_file,
                 :export, :no_filter, :interpolate,
                 :import, :key_id, :key_alias, :random_size, :prune, :force,
                 :diff_path, :import_path,
@@ -35,36 +35,37 @@ module SecretConfig
                 :console,
                 :show_version
 
-    PROVIDERS = %i[ssm].freeze
+    PROVIDERS = %i[ssm file].freeze
 
     def self.run!(argv)
       new(argv).run!
     end
 
     def initialize(argv)
-      @export       = false
-      @import       = false
-      @path         = nil
-      @key_id       = nil
-      @key_alias    = nil
-      @provider     = :ssm
-      @random_size  = 32
-      @no_filter    = false
-      @prune        = false
-      @replace      = false
-      @copy_path    = nil
-      @show_version = false
-      @console      = false
-      @diff         = false
-      @set_key      = nil
-      @set_value    = nil
-      @fetch_key    = nil
-      @delete_key   = nil
-      @delete_tree  = nil
-      @diff_path    = nil
-      @import_path  = nil
-      @force        = false
-      @interpolate  = false
+      @export        = false
+      @import        = false
+      @path          = nil
+      @key_id        = nil
+      @key_alias     = nil
+      @provider      = :ssm
+      @provider_file = nil
+      @random_size   = 32
+      @no_filter     = false
+      @prune         = false
+      @replace       = false
+      @copy_path     = nil
+      @show_version  = false
+      @console       = false
+      @diff          = false
+      @set_key       = nil
+      @set_value     = nil
+      @fetch_key     = nil
+      @delete_key    = nil
+      @delete_tree   = nil
+      @diff_path     = nil
+      @import_path   = nil
+      @force         = false
+      @interpolate   = false
 
       if argv.empty?
         puts parser
@@ -172,6 +173,14 @@ module SecretConfig
           @provider = provider.to_sym
         end
 
+        # Distinct from --file, which is the file that --export/--import/--diff transfer to or from.
+        # This is the store itself, the file provider's equivalent of the SSM parameter tree.
+        opts.on "--provider-file FILE_NAME",
+                "For --provider file only. The config file to read and write. " \
+                "Default: $SECRET_CONFIG_FILE_NAME, then config/application.yml." do |file_name|
+          @provider_file = file_name
+        end
+
         opts.on "--no-filter", "For --export only. Do not filter passwords and keys." do
           @no_filter = true
         end
@@ -235,8 +244,10 @@ module SecretConfig
           else
             Providers::Ssm.new
           end
+        when :file
+          Providers::File.new(file_name: provider_file)
         else
-          raise ArgumentError, "Invalid provider: #{provider}"
+          raise ArgumentError, "Invalid provider: #{provider}. Valid providers: #{PROVIDERS.join(' | ')}"
         end
     end
 
@@ -321,8 +332,14 @@ module SecretConfig
       provider_instance.set(key, value)
     end
 
+    # Only used by `import_config`, to decide which keys are new and which changed.
+    # A target that does not exist yet has no current values. SSM already behaves that way, since a path
+    # with no parameters under it simply yields nothing. The file provider instead raises for both a
+    # missing file and a missing path, so treat that as the empty store it is: importing is what creates it.
     def current_values(path)
       Utils.flatten(fetch_config(path, filtered: false), path)
+    rescue ConfigurationError
+      {}
     end
 
     def read_config_file(file_name)
