@@ -42,7 +42,7 @@ Available interpolations:
 * ${random}
     * URL safe Random 32 byte value.
     * A new value is generated on every restart and on every refresh. Not to be confused with the CLI's
-      `$(random)`, which is generated once during an import and then persisted. See the [CLI](cli).
+      `__generate__`, which is generated once during an import and then persisted. See the [CLI](cli).
 * ${random:size}
     * URL safe Random value of `size` bytes.
 * ${select:a,b,c,d}
@@ -58,4 +58,4 @@ Available interpolations:
   every time the registry is refreshed there is no runtime overhead when keys are fetched.
 * Because they are re-evaluated on every refresh, interpolations that generate a new value each time,
   `${random}` and `${select:...}`, are not suitable for values that have to remain stable, such as
-  passwords. For those use the CLI's `$(random)`, which generates the value once during an import.
+  passwords. For those use the CLI's `__generate__`, which generates the value once during an import.

@@ -201,8 +201,9 @@ module SecretConfig
         end
 
         opts.on "--random_size INTEGER", Integer,
-                "For --import only. Size to use when generating random values when $(random) is " \
-                "encountered in the source. Default: 32" do |random_size|
+                "For --import only. Default size in bytes to use when generating values when " \
+                "__generate__ is encountered in the source. Override per key with __generate__:size. " \
+                "Default: 32" do |random_size|
           @random_size = random_size
         end
 
@@ -340,10 +341,10 @@ module SecretConfig
         next if value.nil?
         next if !force && current_values[key].to_s == value.to_s
 
-        if value.to_s.strip == RANDOM
+        if (size = generate_size(key, value))
           next if current_values.key?(key)
 
-          value = random_password
+          value = random_password(size)
         elsif value == FILTERED
           # Ignore filtered values
           next
@@ -462,8 +463,35 @@ module SecretConfig
       end
     end
 
-    def random_password
-      SecureRandom.urlsafe_base64(random_size)
+    # Returns the size in bytes to generate for `value`, or nil when it is not a generate token.
+    # `__generate__` uses `--random_size`, `__generate__:64` overrides it for this key alone.
+    # A near miss such as `__generate__:abc` raises rather than being imported literally, since it is
+    # far more likely to be a typo than an intended value.
+    def generate_size(key, value)
+      value = value.to_s.strip
+
+      if value == RANDOM
+        SecretConfig.deprecation_warning(
+          "`#{RANDOM}` is deprecated in favor of `#{SecretConfig::GENERATE}`, which is not so easily " \
+          "confused with the `${random}` interpolation. Update the value of `#{key}`."
+        )
+        return random_size
+      end
+
+      return nil unless value.start_with?(SecretConfig::GENERATE)
+
+      match = SecretConfig::GENERATE_PATTERN.match(value)
+      unless match
+        raise ArgumentError,
+              "Invalid generate token #{value.inspect} for key #{key.inspect}. " \
+              "Expected `#{SecretConfig::GENERATE}` or `#{SecretConfig::GENERATE}:size`, for example `#{SecretConfig::GENERATE}:64`."
+      end
+
+      match[1]&.to_i || random_size
+    end
+
+    def random_password(size = random_size)
+      SecureRandom.urlsafe_base64(size)
     end
 
     def sort_hash_by_key!(hash)

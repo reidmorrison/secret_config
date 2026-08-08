@@ -25,7 +25,7 @@ secret-config [options]
         --force                      For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key.
         --key_id KEY_ID              For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key.
         --key_alias KEY_ALIAS        For --import only. Encrypt config settings with this AWS KMS alias.
-        --random_size INTEGER        For --import only. Size to use when generating random values when $(random) is encountered in the source. Default: 32
+        --random_size INTEGER        For --import only. Default size in bytes to use when generating values when __generate__ is encountered in the source. Override per key with __generate__:size. Default: 32
     -v, --version                    Display Secret Config version.
     -h, --help                       Prints this help.
 ~~~
@@ -111,25 +111,49 @@ Import configuration from an existing path in AWS SSM Parameter Store into anoth
 #### Generating random passwords
 
 In the multi-tenant example above, we may want to generate a secure random password for each tenant.
-In the source file or registry, set the value to `$(random)`, this will ensure that during the `import`
+In the source file or registry, set the value to `__generate__`, this will ensure that during the `import`
 that the destination will receive a secure random value.
 
-The value must be exactly `$(random)`, ignoring any surrounding spaces. Any other spelling is imported
-as a literal string.
+    mysql:
+      password: __generate__
 
-By default the length of the randomized value is 32 bytes, use `--random_size` to adjust the length of
-the randomized string.
+The value must be exactly `__generate__`, ignoring any surrounding spaces.
 
-#### `$(random)` is not `${random}`
+Existing values are left alone, so re-running the import does not replace a password that was already
+generated. This holds under `--force` as well: forcing an import re-writes every key so that it is
+re-encrypted under a new KMS key, but it never regenerates a value that is already present.
 
-These look alike and behave very differently. Note the parentheses versus the braces:
+By default the length of the generated value is 32 bytes, use `--random_size` to change the default for
+the whole import. To override it for a single key, supply the size on the token itself:
 
-* `$(random)` is materialized once, by the CLI, during an `--import`. The generated value is written to
-  the registry and stays there. Existing values are left alone, so re-running the import does not
-  replace a password that was already generated.
+    mysql:
+      password: __generate__        # 32 bytes
+      api_key:  __generate__:64     # 64 bytes
+
+Note that the size must be written tight against the colon. `__generate__: 64` is not valid YAML in a
+value position, since YAML reads the `: ` as the start of a nested mapping.
+
+A value that starts with `__generate__` but is not one of those two forms, such as `__generate__:abc`
+or `__generate__:0`, raises an error rather than being imported as a literal string, on the grounds that
+it is far more likely to be a typo than an intended value.
+
+#### `__generate__` is not `${random}`
+
+Both produce a random value, and they behave very differently:
+
+* `__generate__` is materialized once, by the CLI, during an `--import`. The generated value is written
+  to the registry and stays there.
 * `${random}` is a [string interpolation](interpolation). It is evaluated by the application every time
   the registry is loaded or refreshed, so it produces a different value on every restart.
 
-Use `$(random)` for anything that has to stay the same after it is generated, such as a database
+Use `__generate__` for anything that has to stay the same after it is generated, such as a database
 password. `${random}` is only suitable for values that are genuinely disposable within a single process.
+
+#### Deprecated: `$(random)`
+
+`__generate__` was previously spelled `$(random)`, which was too easily confused with the `${random}`
+interpolation above. The old spelling still works and still honors `--random_size`, but it prints a
+deprecation warning on stderr and will be removed in the next major release. It does not accept a
+per-key size. Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress the warning while
+migrating.
 
