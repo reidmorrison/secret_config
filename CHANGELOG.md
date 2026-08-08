@@ -14,10 +14,26 @@ Targeted at v2, since it carries breaking changes.
 - Raise the supported Ruby floor to 3.2. The gemspec declared 2.3 and rubocop targeted 2.5, while
   CI has only ever tested 3.2 and up.
 
+### Deprecated
+
+- The import-time token `$(random)` is renamed to `__generate__`, since a single character was all that
+  separated it from the `${random}` interpolation, which has very different semantics: `$(random)` is
+  materialized once during a CLI `--import` and persisted, whereas `${random}` is re-evaluated on every
+  startup and `refresh!`. `$(random)` still works and still honors `--random_size`, but now prints a
+  deprecation warning on stderr and will be removed in the next major release.
+- `--random_size` is deprecated in favor of `__generate__:size`. The flag set one size for every
+  generated value in the import, so two keys needing different sizes meant two separate imports. It
+  still works and still sets the default for a bare `__generate__`, but warns when supplied.
+
+Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress these warnings while migrating.
+
 ### Added
 
 - `SecretConfig.use` accepts `interpolate:`, which was previously reachable only by constructing a
   `Registry` directly. It defaults to `true`, so existing calls are unaffected.
+- `__generate__:size` sets the number of bytes to generate for a single key, overriding `--random_size`
+  for that key only. A value that begins with `__generate__` but matches neither form, such as
+  `__generate__:abc` or `__generate__:0`, now raises rather than being imported as a literal string.
 - Documentation for `__import__` and `__value__` in the
   [Guide](https://config.reidmorrison.com/guide.html).
 
@@ -29,6 +45,11 @@ Targeted at v2, since it carries breaking changes.
   OptionParser gave `-f` to `--fetch`, so no working invocation changes meaning.
 - `Providers::File#fetch` and the "path not found" error in `Providers::File#each` raised `NameError`
   instead of doing their job.
+- `secret-config --import --force` no longer regenerates values that are already present. `--force`
+  passed an empty hash in place of the current values, which was intended only to defeat the
+  skip-unchanged-keys optimization, but also defeated the guard that leaves an existing generated value
+  alone. Forcing an import to re-encrypt under a new KMS key, the documented use case, silently replaced
+  every `$(random)` secret in the source with a new one.
 - An `__import__` of a node that is itself an import now resolves regardless of the order the two
   nodes are declared in. Previously the unresolved `__import__` key was copied across instead of the
   settings behind it, leaving a reserved key visible in the registry. Circular imports raise

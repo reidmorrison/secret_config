@@ -201,8 +201,13 @@ module SecretConfig
         end
 
         opts.on "--random_size INTEGER", Integer,
-                "For --import only. Size to use when generating random values when $(random) is " \
-                "encountered in the source. Default: 32" do |random_size|
+                "Deprecated. For --import only. Default size in bytes to use when generating values " \
+                "when __generate__ is encountered in the source. Supply the size on each value instead, " \
+                "as __generate__:size. Default: 32" do |random_size|
+          SecretConfig.deprecation_warning(
+            "`--random_size` is deprecated. Supply the size on each value instead, as " \
+            "`#{SecretConfig::GENERATE}:#{random_size}`, which sets it per key rather than for the whole import."
+          )
           @random_size = random_size
         end
 
@@ -332,15 +337,18 @@ module SecretConfig
       write_file(file_name, data)
     end
 
-    def set_config(config, path, current_values = {})
+    # `force` writes every key, including unchanged ones, so that they are re-encrypted under a new KMS key.
+    # It must not affect anything else that reads `current_values`, in particular the `RANDOM` guard below:
+    # regenerating a persisted secret during a key rotation would silently invalidate it.
+    def set_config(config, path, current_values = {}, force: false)
       Utils.flatten_each(config, path) do |key, value|
         next if value.nil?
-        next if current_values[key].to_s == value.to_s
+        next if !force && current_values[key].to_s == value.to_s
 
-        if value.to_s.strip == RANDOM
-          next if current_values[key]
+        if (size = generate_size(key, value))
+          next if current_values.key?(key)
 
-          value = random_password
+          value = random_password(size)
         elsif value == FILTERED
           # Ignore filtered values
           next
@@ -399,7 +407,7 @@ module SecretConfig
         sleep(5)
       end
 
-      set_config(config, path, force ? {} : current)
+      set_config(config, path, current, force: force)
 
       delete_keys.each do |key|
         puts "#{Colors::REMOVE}- #{key}#{Colors::CLEAR}"
@@ -459,8 +467,35 @@ module SecretConfig
       end
     end
 
-    def random_password
-      SecureRandom.urlsafe_base64(random_size)
+    # Returns the size in bytes to generate for `value`, or nil when it is not a generate token.
+    # `__generate__` uses `--random_size`, `__generate__:64` overrides it for this key alone.
+    # A near miss such as `__generate__:abc` raises rather than being imported literally, since it is
+    # far more likely to be a typo than an intended value.
+    def generate_size(key, value)
+      value = value.to_s.strip
+
+      if value == RANDOM
+        SecretConfig.deprecation_warning(
+          "`#{RANDOM}` is deprecated in favor of `#{SecretConfig::GENERATE}`, which is not so easily " \
+          "confused with the `${random}` interpolation. Update the value of `#{key}`."
+        )
+        return random_size
+      end
+
+      return nil unless value.start_with?(SecretConfig::GENERATE)
+
+      match = SecretConfig::GENERATE_PATTERN.match(value)
+      unless match
+        raise ArgumentError,
+              "Invalid generate token #{value.inspect} for key #{key.inspect}. " \
+              "Expected `#{SecretConfig::GENERATE}` or `#{SecretConfig::GENERATE}:size`, for example `#{SecretConfig::GENERATE}:64`."
+      end
+
+      match[1]&.to_i || random_size
+    end
+
+    def random_password(size = random_size)
+      SecureRandom.urlsafe_base64(size)
     end
 
     def sort_hash_by_key!(hash)

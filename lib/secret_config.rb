@@ -11,7 +11,22 @@ module SecretConfig
   # A node with the following key imports the settings under the path it refers to into its parent node.
   IMPORT_KEY = "__import__".freeze
   FILTERED   = "[FILTERED]".freeze
-  RANDOM     = "$(random)".freeze
+  # A value of `__generate__` is replaced by the CLI during an `--import` with a generated random value,
+  # which is then persisted. Unlike `${random}` it is evaluated once, not on every startup and `refresh!`.
+  # An optional size in bytes may be supplied as `__generate__:64`, defaulting to `--random_size`.
+  #
+  # Deliberately not spelled `${generate}`, which cannot work: `StringInterpolator#parse` raises on any
+  # `${...}` key it cannot dispatch, so the token would fail the whole registry load for any file that is
+  # both a CLI import source and read by the file provider. Making it dispatch would not help either,
+  # since `${...}` composes inside a larger string while this sentinel is whole-value only, so
+  # `password_${generate}` would parse as valid and silently never generate anything.
+  GENERATE   = "__generate__".freeze
+  # The size must be a positive integer, so that `__generate__:0` is rejected rather than
+  # silently storing an empty secret.
+  GENERATE_PATTERN = /\A__generate__(?::([1-9]\d*))?\z/
+  # Deprecated spelling of `GENERATE`, too easily confused with the `${random}` interpolation.
+  # Still honored, with a warning. To be removed in the next major release.
+  RANDOM = "$(random)".freeze
 
   module Providers
     autoload :File, "secret_config/providers/file"
@@ -113,6 +128,17 @@ module SecretConfig
     @check_env_var = check_env_var
   end
 
-  @check_env_var = true
-  @filters       = [/password/i, /key\Z/i, /passphrase/i, /secret/i, /pwd\Z/i]
+  # Warn once per distinct message about a deprecated feature.
+  # Written to stderr so that it does not corrupt CLI output that is being piped or redirected.
+  # Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress.
+  def self.deprecation_warning(message)
+    return if ENV.key?("SECRET_CONFIG_SILENCE_DEPRECATIONS")
+    return unless @deprecation_warnings.add?(message)
+
+    warn("[secret_config] Deprecation: #{message}")
+  end
+
+  @check_env_var        = true
+  @filters              = [/password/i, /key\Z/i, /passphrase/i, /secret/i, /pwd\Z/i]
+  @deprecation_warnings = Set.new
 end
