@@ -96,6 +96,36 @@ class ParserTest < Minitest::Test
 
         assert_includes error.message, "node/__import__"
       end
+
+      describe "with absolute paths" do
+        it "imports values from outside the current root" do
+          registry = registry_for("/test/absolute_valid")
+
+          assert_equal "source.example.net", registry["node/host"], -> { registry.configuration(filters: nil).ai }
+        end
+
+        it "retains overrides over the imported values" do
+          registry = registry_for("/test/absolute_valid")
+
+          assert_equal "5432", registry["node/port"], -> { registry.configuration(filters: nil).ai }
+        end
+
+        it "raises for two nodes that import each other" do
+          error = assert_raises SecretConfig::ConfigurationError do
+            registry_for("/test/absolute_a")
+          end
+
+          assert_includes error.message, "/test/absolute_a -> /test/absolute_b/node"
+        end
+
+        it "raises for a node that imports itself" do
+          error = assert_raises SecretConfig::ConfigurationError do
+            registry_for("/test/absolute_self")
+          end
+
+          assert_includes error.message, "/test/absolute_self/node -> /test/absolute_self/node"
+        end
+      end
     end
   end
 end

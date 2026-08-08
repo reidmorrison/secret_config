@@ -1,12 +1,16 @@
 module SecretConfig
   class Parser
-    attr_reader :tree, :path, :registry, :interpolator
+    attr_reader :tree, :path, :registry, :interpolator, :fetch_chain
 
-    def initialize(path, registry, interpolate: true)
+    # `fetch_chain` holds the absolute paths being fetched, ending with this parser's own path.
+    # It is threaded through `Registry#fetch_path` so that a cycle in absolute imports is visible
+    # here, since each of those fetches builds a parser of its own.
+    def initialize(path, registry, interpolate: true, fetch_chain: nil)
       @path         = path
       @registry     = registry
       @tree         = {}
       @interpolator = interpolate ? SettingInterpolator.new : nil
+      @fetch_chain  = fetch_chain || [path]
     end
 
     # Returns a flat path of keys and values from the provider without looking in the local path.
@@ -57,7 +61,7 @@ module SecretConfig
           apply_nested_imports(source_path, chain + [key])
           relative_values(source_path)
         else
-          registry.send(:fetch_path, source_path)
+          fetch_absolute(source_path)
         end
 
       tree.delete(key)
@@ -68,6 +72,20 @@ module SecretConfig
         imported_key       = target_path.nil? ? relative_key : ::File.join(target_path, relative_key)
         tree[imported_key] = value unless tree.key?(imported_key)
       end
+    end
+
+    # Returns [Hash] the values under an absolute path, read from the provider.
+    #
+    # Raises when the path is already being fetched further up, which `chain` cannot catch: it only
+    # tracks the import keys within this parser, and the paths on either side of a fetch are parsed
+    # by different ones.
+    def fetch_absolute(source_path)
+      if fetch_chain.include?(source_path)
+        raise(ConfigurationError,
+              "Circular #{IMPORT_KEY} in #{path}: #{(fetch_chain + [source_path]).join(' -> ')}")
+      end
+
+      registry.send(:fetch_path, source_path, fetch_chain)
     end
 
     # Resolves any imports inside the subtree that is about to be imported, so that the values they

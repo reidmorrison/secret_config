@@ -21,3 +21,27 @@ test:
   self_referencing:
     node:
       __import__: node
+
+  # Absolute imports are each resolved by a separate fetch, so these cycles are only visible
+  # across the fetches rather than within a single parser.
+  absolute_a:
+    node:
+      __import__: /test/absolute_b/node
+
+  absolute_b:
+    node:
+      __import__: /test/absolute_a/node
+
+  absolute_self:
+    node:
+      __import__: /test/absolute_self/node
+
+  # A valid absolute import, to confirm the cycle check does not reject the ordinary case.
+  absolute_valid:
+    node:
+      __import__: /test/absolute_source
+      port:       5432
+
+  absolute_source:
+    host: source.example.net
+    port: 3306

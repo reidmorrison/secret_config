@@ -10,28 +10,7 @@ versioning section of [CLAUDE.md](CLAUDE.md).
 
 ## Bugs
 
-### 1. Mutually recursive absolute imports overflow the stack
-
-An absolute `__import__` is resolved by `Registry#fetch_path`, which builds a fresh `Parser`, so the cycle
-tracking that guards relative imports does not cross that boundary:
-
-~~~yaml
-test:
-  a:
-    node:
-      __import__: /test/b/node
-  b:
-    node:
-      __import__: /test/a/node
-~~~
-
-    Registry.new(path: "/test/a", ...) => SystemStackError
-
-The relative equivalent raises `ConfigurationError` with the cycle in the message, so the two cases report
-very differently. Fixing it means threading the set of absolute paths already being fetched through
-`Registry#fetch_path` into the `Parser` it creates, and raising when a path recurs.
-
-### 2. `fetch` consults a block only when a default is also supplied
+### 1. `fetch` consults a block only when a default is also supplied
 
 The missing-key check runs before the block, so a block on its own does not satisfy a missing key:
 
@@ -44,7 +23,7 @@ Changing this is **[breaking]** for anyone relying on the current raise. Asserte
 
 ## Design questions
 
-### 3. `cli.rb` is excluded from the `Metrics/*` cops
+### 2. `cli.rb` is excluded from the `Metrics/*` cops
 
 `Metrics/AbcSize`, `ClassLength`, `CyclomaticComplexity`, `MethodLength`, and `BlockLength` all exclude
 `cli.rb` in [.rubocop.yml](.rubocop.yml). Against the default config it is 526 lines with a class body of
