@@ -11,7 +11,8 @@ Gem::Specification.new do |s|
   s.platform              = Gem::Platform::RUBY
   s.authors               = ["Reid Morrison"]
   s.homepage              = "https://config.reidmorrison.com"
-  s.summary               = "Centralized Configuration and Secrets Management for Ruby and Rails applications."
+  s.summary               = "Ship the same image to every environment and tenant. " \
+                            "Configuration and secrets come from one central store."
   s.description           = "Secret Config stores configuration settings and secrets centrally, " \
                             "supporting multiple tenants of the same application. Settings are read " \
                             "from AWS System Manager Parameter Store, or a local file during " \
