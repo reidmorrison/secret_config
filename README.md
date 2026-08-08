@@ -1,9 +1,11 @@
 # Secret Config
 [![Gem Version](https://img.shields.io/gem/v/secret_config.svg)](https://rubygems.org/gems/secret_config) [![Build Status](https://github.com/reidmorrison/secret_config/workflows/build/badge.svg)](https://github.com/reidmorrison/secret_config/actions?query=workflow%3Abuild) [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](http://opensource.org/licenses/Apache-2.0) ![](https://img.shields.io/badge/status-Production%20Ready-blue.svg)
 
-Centralized Configuration and Secrets Management for Ruby and Rails applications.
+Ship the same image to every environment and tenant. Configuration and secrets come from one central store.
 
-Securely store configuration information centrally, supporting multiple tenants of the same application.
+Centralized configuration and secrets management for Ruby and Rails. Settings are read from AWS SSM
+Parameter Store, or a local file during development and test, and can be overridden with environment
+variables.
 
 ## Documentation
 

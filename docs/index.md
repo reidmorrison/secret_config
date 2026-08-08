@@ -10,7 +10,9 @@ layout: default
 * TOC
 {:toc}
 
-Secret Config is centralized configuration and secrets management for Ruby and Rails applications.
+Secret Config is centralized configuration and secrets management for Ruby and Rails applications. It
+lets you ship the same image to every environment and tenant, because the configuration and secrets no
+longer travel with the image.
 
 It reads a tree of settings from one place, a local YAML file in development or AWS SSM Parameter Store
 in production, into memory when the application starts, and serves them through a global `SecretConfig`
