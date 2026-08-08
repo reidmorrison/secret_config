@@ -17,8 +17,8 @@ turns up something that is not being fixed now, raise it rather than leaving it 
 
 ## Git workflow
 
-Never commit directly to `master`. Create a feature branch first, commit there, and open a pull request.
-This applies to documentation and config changes too, not just code. If asked to commit while `master` is
+Never commit directly to `main`. Create a feature branch first, commit there, and open a pull request.
+This applies to documentation and config changes too, not just code. If asked to commit while `main` is
 checked out, branch first, then commit.
 
 ## Versioning and backward compatibility

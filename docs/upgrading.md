@@ -12,7 +12,7 @@ layout: default
 
 This page covers what changes between major versions and what to do about it. The full record, including
 every non-breaking change, is in
-[CHANGELOG.md](https://github.com/reidmorrison/secret_config/blob/master/CHANGELOG.md).
+[CHANGELOG.md](https://github.com/reidmorrison/secret_config/blob/main/CHANGELOG.md).
 
 Secret Config follows [Semantic Versioning](https://semver.org/). Breaking changes are confined to major
 releases: within a minor or patch release the meaning of a key, the return type of a call, the default
@@ -177,5 +177,5 @@ and the arguments should be checked rather than assumed:
 
 * [Command Line](cli): the current CLI, including `__generate__`.
 * [Guide](api): the current programming interface.
-* [CHANGELOG.md](https://github.com/reidmorrison/secret_config/blob/master/CHANGELOG.md): the complete
+* [CHANGELOG.md](https://github.com/reidmorrison/secret_config/blob/main/CHANGELOG.md): the complete
   record.
