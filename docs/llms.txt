@@ -1,0 +1,33 @@
+# Secret Config
+
+> Secret Config is centralized configuration and secrets management for Ruby and Rails applications. It reads a tree of settings from a provider (AWS SSM Parameter Store, or a local YAML file) into memory at startup and serves them through a global `SecretConfig` singleton, so every lookup after startup is an in-memory hash read. Environment variables can override any individual setting.
+
+Key facts:
+
+- Install with `gem install secret_config` or `gem "secret_config"` in a Gemfile. Requires Ruby 3.2 or later.
+- Keys are paths, such as `mysql/host`, read relative to a root path such as `/production/my_application`. Providers deal in absolute keys; the registry strips the root before caching.
+- All values are stored as strings. `fetch` applies, in order: environment variable override, `encoding:` (`:base64`), then `type:` (`:string`, `:integer`, `:float`, `:boolean`, `:symbol`, `:json`), with `separator:` splitting one value into an array.
+- Any setting can be overridden by an environment variable named after the key, upcased, with `/` replaced by `_`: `mysql/host` becomes `MYSQL_HOST`.
+- The `secret-config` command line tool imports, exports, diffs and edits the central store. It runs against a local file with `--provider file`, needing no AWS credentials.
+- The AWS SDK is not a dependency. Add `aws-sdk-ssm` to use the SSM provider.
+- Human-readable documentation lives at https://config.reidmorrison.com. The links below point at the raw markdown sources of the same pages.
+- The complete documentation concatenated into a single file: https://config.reidmorrison.com/llms-full.txt
+- Source code: https://github.com/reidmorrison/secret_config
+
+## Documentation
+
+- [Introduction](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/index.md): What Secret Config is, the problem it solves, and a quick start that runs from a local file with no AWS account.
+- [Getting Started](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/guide.md): Installing, creating `config/application.yml`, reading a first setting, and converting an existing `database.yml` or a library's custom config file.
+- [Guide](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/api.md): The full programming interface, taught in twelve steps: `fetch` and `[]`, defaults and blocks, `type:`, `separator:`, `encoding:`, environment variable overrides, `key?`, `configuration`, `SecretConfig.configure`, `refresh!`, filters, and writing values. Ends with troubleshooting.
+- [Configuration](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/config.md): `SecretConfig.use` options, choosing a root path, `check_env_var`, `interpolate:`, filters, and the `SECRET_CONFIG_*` environment variables that change startup behavior.
+- [Providers](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/providers.md): The file provider (layout, ERB, writing, errors) and the SSM provider (KMS keys, options, retries and throttling, IAM policy, limits and cost), plus how to write a custom provider.
+- [Interpolation and Imports](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/interpolation.md): `${...}` tokens for environment variables, host name, date, random and select values; `$${...}` escaping; `__import__` for sharing subtrees; and `__value__` for a node that is both a value and a branch.
+- [Command Line](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/cli.md): The `secret-config` tool, taught as workflows: inspecting a store, editing single keys, importing, diffing before importing, exporting, copying a path to spin up a tenant, generating per-tenant passwords with `__generate__`, and rotating a KMS key.
+- [Rails](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/rails.md): Setup in `application.rb`, converting `database.yml`, sharing one settings file across engines, container deployment, and worked examples for Semantic Logger, ActionMailer and Symmetric Encryption.
+- [Testing](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/testing.md): Giving a test suite its own settings, overriding one setting for one test, using an in-memory provider, and restoring global state between tests.
+
+## Optional
+
+- [Upgrading](https://raw.githubusercontent.com/reidmorrison/secret_config/master/docs/upgrading.md): Breaking changes per major version, including the v2 changes to `key?`, environment variable caching and `fetch` blocks, and the `$(random)` to `__generate__` rename.
+- [README](https://raw.githubusercontent.com/reidmorrison/secret_config/master/README.md): Project overview and links.
+- [CHANGELOG](https://raw.githubusercontent.com/reidmorrison/secret_config/master/CHANGELOG.md): The complete change record.
