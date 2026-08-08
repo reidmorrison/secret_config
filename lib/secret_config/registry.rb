@@ -54,12 +54,19 @@ module SecretConfig
 
     # Returns [String] configuration value for the supplied key
     # Convert the string value into an array of values by supplying a `separator`.
+    #
+    # When the key is missing the block is called, if supplied, otherwise `default` is used.
+    # Without either, `MissingMandatoryKey` is raised.
     def fetch(key, default: :no_default_supplied, type: :string, encoding: nil, separator: nil)
       value = self[key]
       if value.nil?
-        raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}") if default == :no_default_supplied
-
-        value = block_given? ? yield : default
+        if block_given?
+          value = yield
+        elsif default == :no_default_supplied
+          raise(MissingMandatoryKey, "Missing configuration value for #{path}/#{key}")
+        else
+          value = default
+        end
       end
 
       value = convert_encoding(encoding, value) if encoding

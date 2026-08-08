@@ -222,16 +222,22 @@ class RegistryTest < Minitest::Test
         assert_equal "Unrecognized type:array", error.message
       end
 
-      # NOTE: a block is only consulted when a default is also supplied, since the missing key check
-      # runs first. See TECH_DEBT.md.
       it "prefers a block over the supplied default when the key is missing" do
         assert_equal "from_block", registry.fetch("mysql/unknown", default: "unused") { "from_block" }
       end
 
-      it "raises when a block is supplied without a default" do
-        assert_raises SecretConfig::MissingMandatoryKey do
-          registry.fetch("mysql/unknown") { "from_block" }
-        end
+      it "calls the block when the key is missing and no default is supplied" do
+        assert_equal "from_block", registry.fetch("mysql/unknown") { "from_block" }
+      end
+
+      it "converts the value returned by the block" do
+        assert_equal 42, registry.fetch("mysql/unknown", type: :integer) { "42" }
+      end
+
+      it "does not call the block when the key is present" do
+        value = registry.fetch("mysql/host") { flunk("block should not be called") }
+
+        assert_equal "127.0.0.1", value
       end
     end
 
