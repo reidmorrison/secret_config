@@ -79,13 +79,24 @@ class CLITest < Minitest::Test
         end
       end
 
-      # Current behavior, not desired behavior: the value is split on every "=", so base64 padding is
-      # silently dropped. See TECH_DEBT.md.
-      it "truncates a value containing an equals sign" do
+      it "raises when the value is empty" do
+        assert_raises ArgumentError do
+          SecretConfig::CLI.new(["--set", "mysql/database="])
+        end
+      end
+
+      it "retains an equals sign in the value" do
         cli = SecretConfig::CLI.new(["--set", "symmetric_encryption/key=QUJDREVG12345="])
 
         assert_equal "symmetric_encryption/key", cli.set_key
-        assert_equal "QUJDREVG12345", cli.set_value
+        assert_equal "QUJDREVG12345=", cli.set_value
+      end
+
+      it "retains every equals sign in the value" do
+        cli = SecretConfig::CLI.new(["--set", "mysql/url=host=localhost;port=3306"])
+
+        assert_equal "mysql/url", cli.set_key
+        assert_equal "host=localhost;port=3306", cli.set_value
       end
     end
 
@@ -140,14 +151,21 @@ class CLITest < Minitest::Test
       end
     end
 
-    # Current behavior, not desired behavior: "-f" is bound to both --file and --fetch, and the later
-    # definition wins, so --file has no working short form. See TECH_DEBT.md.
+    # "-f" is the short form of --fetch only. --file is deliberately long form only, since defining
+    # "-f" on both silently gave --fetch the short option and left --file without one.
     describe "the -f short option" do
-      it "sets the fetch key rather than the file name" do
-        cli = SecretConfig::CLI.new(["-f", "application.yml"])
+      it "sets the fetch key" do
+        cli = SecretConfig::CLI.new(["-f", "mysql/host"])
 
-        assert_equal "application.yml", cli.fetch_key
+        assert_equal "mysql/host", cli.fetch_key
         assert_nil cli.file_name
+      end
+
+      it "leaves --file with a long form only" do
+        cli = SecretConfig::CLI.new(["--file", "application.yml", "-f", "mysql/host"])
+
+        assert_equal "application.yml", cli.file_name
+        assert_equal "mysql/host", cli.fetch_key
       end
     end
 

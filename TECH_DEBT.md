@@ -9,52 +9,51 @@ the rest are safe to ship at any time. See the versioning section of [CLAUDE.md]
 
 ## Bugs
 
-### 1. `Providers::File#fetch` raises `NameError`
+### 1. `Providers::File#fetch` raises `NameError` — RESOLVED
 
-[lib/secret_config/providers/file.rb:27-30](lib/secret_config/providers/file.rb#L27-L30) calls
-`fetch_path(path)`, but `path` is neither a parameter nor an accessor on the class. The parameter is
-named `_key` and is unused.
+`fetch` called `fetch_path(path)`, but `path` was neither a parameter nor an accessor on the class. The
+parameter was named `_key` and was unused.
 
     fetch => NameError: undefined local variable or method 'path'
 
-`Registry` only calls `provider.each`, so nothing in the library reaches this method. Decide whether to
-delete it or make it work, so that an absolute `__import__` can resolve against the file provider.
+Fixed in `c2690b7`: the parameter is now `key` and is passed to `fetch_path`, so an absolute `__import__`
+can resolve against the file provider. Covered by [test/providers/file_test.rb](test/providers/file_test.rb).
 
-### 2. "Path not found" in `Providers::File#each` raises `NameError`
+### 2. "Path not found" in `Providers::File#each` raises `NameError` — RESOLVED
 
-[lib/secret_config/providers/file.rb:20](lib/secret_config/providers/file.rb#L20) interpolates `paths`,
-which is a local variable inside `fetch_path`, not in scope at the raise site.
+The raise site interpolated `paths`, a local variable inside `fetch_path` that was not in scope there.
 
     each(missing path) => NameError: undefined local variable or method 'paths'
 
-The intended `ConfigurationError` never surfaces, so a typo'd path in `application.yml` gives a developer
-a `NameError` instead of a useful message.
+Fixed in `c2690b7`: the message interpolates `path`, so a typo'd path in `application.yml` now raises the
+intended `ConfigurationError`.
 
-### 3. `--set` truncates any value containing `=`
+### 3. `--set` truncates any value containing `=` — RESOLVED
 
-[lib/secret_config/cli.rb:141](lib/secret_config/cli.rb#L141) uses `param.split("=")`, which splits on
-every `=` rather than just the first, so the value is silently truncated:
+The option handler used `param.split("=")`, which splits on every `=` rather than just the first, so the
+value was silently truncated:
 
     --set symmetric_encryption/key=QUJDREVG12345=
     => key "symmetric_encryption/key", value "QUJDREVG12345"
 
-The trailing `=` is gone. This matters specifically for this gem, since base64 encryption keys and
+The trailing `=` was gone. This mattered specifically for this gem, since base64 encryption keys and
 initialization vectors are padded with `=` and are exactly the kind of value stored here. A truncated key
-is written without error and fails later at decryption time.
+was written without error and failed later at decryption time.
 
-`param.split("=", 2)` fixes it. Locked in by a test in [test/cli_test.rb](test/cli_test.rb) that documents
-the current behavior; update that test when fixing.
+Fixed with `param.split("=", 2)`. The guard that rejects a missing value now also rejects an empty one, so
+`--set key=` still raises `ArgumentError` as it did before. [test/cli_test.rb](test/cli_test.rb) asserts
+that the value is preserved.
 
-### 4. `-f` is bound to both `--file` and `--fetch`
+### 4. `-f` is bound to both `--file` and `--fetch` — RESOLVED
 
-[lib/secret_config/cli.rb:128](lib/secret_config/cli.rb#L128) defines `-f, --file` and
-[cli.rb:147](lib/secret_config/cli.rb#L147) defines `-f, --fetch`. OptionParser lets the later definition
-win, so `--file` has no working short form:
+`-f, --file` and `-f, --fetch` were both defined. OptionParser let the later definition win, so `--file`
+had no working short form:
 
     -f application.yml  =>  fetch_key "application.yml", file_name nil
 
-Anyone following the docs and using `-f` to name an import or export file silently runs a fetch instead.
-Give `--fetch` a different short option, or drop the short form from one of them.
+Fixed by dropping the short form from `--file`, which is what already happened in practice and what
+[docs/cli.md](docs/cli.md) already advertised. `-f` remains `--fetch`, so no working invocation changes
+meaning.
 
 ### 5. `key?` and `[]` disagree about env-var-only keys **[breaking]**
 
@@ -74,41 +73,44 @@ Decide whether `key?` should consult env vars when `check_env_var?` is true.
 
 ## Doc and code drift
 
-### 6. SSM retry defaults are documented incorrectly
+### 6. SSM retry defaults are documented incorrectly — RESOLVED
 
-[docs/config.md](docs/config.md) documents `retry_count` default 10 and `retry_max_ms` default 3_000.
-[lib/secret_config/providers/ssm.rb:17-18](lib/secret_config/providers/ssm.rb#L17-L18) uses 25 and 10_000.
+[docs/config.md](docs/config.md) documented `retry_count` default 10 and `retry_max_ms` default 3_000,
+while [lib/secret_config/providers/ssm.rb:16-17](lib/secret_config/providers/ssm.rb#L16-L17) uses 25 and
+10_000. [docs/index.md](docs/index.md) also described throttling retries as "exponential backoffs", but the
+implementation is deliberately uniform jitter (`rand(retry_max_ms)`), which spreads out retries across
+servers during a high volume restart.
 
-Relatedly, [docs/index.md](docs/index.md) describes throttling retries as "exponential backoffs", but the
-implementation is deliberately uniform jitter (`rand(retry_max_ms)`), with a comment explaining that this
-spreads out retries across servers during a high volume restart. The doc should describe the actual
-strategy.
+Resolved by correcting both docs to match the code, which is non-breaking. Changing the code defaults to
+match the old docs would have been **[breaking]**, since it would quadruple the retry count and shorten
+the sleep window for existing users.
 
-Correcting the docs is non-breaking. Changing the code defaults to match the docs would be **[breaking]**,
-since it would quadruple the retry count and shorten the sleep window for existing users.
+### 7. `array` is documented as a supported type but is not one — RESOLVED
 
-### 7. `array` is documented as a supported type but is not one
-
-[docs/index.md](docs/index.md) lists `array` alongside `integer`, `float`, `string`, `boolean`, `symbol`,
+[docs/index.md](docs/index.md) listed `array` alongside `integer`, `float`, `string`, `boolean`, `symbol`,
 and `json`. `Registry#convert_type` has no such branch:
 
     fetch(type: :array) => ArgumentError: Unrecognized type:array
 
-Arrays are produced by `separator:` instead. Either drop `array` from the docs or add it as an alias.
+Arrays are produced by `separator:` instead, as [docs/api.md](docs/api.md) already described. Resolved by
+dropping `array` from the type list and pointing at `separator:`, rather than adding a type alias.
 
-### 8. `SECRET_CONFIG_ACCOUNT_ID` is documented as a required env var but is unused by the library
+### 8. `SECRET_CONFIG_ACCOUNT_ID` is documented as a required env var but is unused by the library — RESOLVED
 
-The env var table in [docs/config.md](docs/config.md) lists it with priority "required". It appears
+The env var table in [docs/config.md](docs/config.md) listed it with priority "required". It appears
 nowhere in `lib/`. Its only use is [test/providers/ssm_test.rb:43](test/providers/ssm_test.rb#L43), where
-it builds a role ARN. The row also says "used in `rspec`", but the test suite is Minitest.
+it builds a role ARN. The row also said "used in `rspec`", but the test suite is Minitest.
 
-Move it to a contributor doc or remove the row.
+Resolved by removing the row and documenting the env var in [CONTRIBUTING.md](CONTRIBUTING.md), next to
+the instructions for running the live SSM test that reads it.
 
-### 9. Three spellings of the import-time random token
+### 9. Three spellings of the import-time random token — RESOLVED
 
-The constant is `$(random)` and the `--random_size` help text agrees, but the prose at
-[docs/cli.md:114](docs/cli.md#L114) tells users to set the value to `$random`, which will not match the
+The constant is `$(random)` and the `--random_size` help text agrees, but the prose in
+[docs/cli.md](docs/cli.md) told users to set the value to `$random`, which does not match the
 `value.to_s.strip == RANDOM` comparison in the CLI.
+
+Resolved by correcting the prose to `$(random)` and stating that the value must match exactly.
 
 ## Design questions
 
@@ -118,10 +120,12 @@ The constant is `$(random)` and the `--random_size` help text agrees, but the pr
 regenerated on every startup and every `refresh!`. A user who writes `${random}` for a database password
 gets a value that silently changes out from under them.
 
-Decide whether the collision is acceptable, and at minimum document the distinction in
-[docs/interpolation.md](docs/interpolation.md). Documenting is non-breaking; changing either token's
-syntax is **[breaking]** and would need a v2 upgrade note, in the style of the `%{}` to `${}` migration
-already described in [README.md](README.md).
+The documentation half is done: [docs/cli.md](docs/cli.md) now contrasts the two directly and
+[docs/interpolation.md](docs/interpolation.md) warns against `${random}` for values that must stay stable.
+
+Still open: whether the near-identical syntax is acceptable at all. Changing either token is **[breaking]**
+and would need a v2 upgrade note, in the style of the `%{}` to `${}` migration already described in
+[README.md](README.md).
 
 ### 11. `__import__` is effectively undocumented
 

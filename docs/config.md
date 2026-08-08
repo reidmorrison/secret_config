@@ -84,8 +84,8 @@ for `config.secret_config.use :ssm, path, **args`
 Args hash:
 * **:key_id** (String) - Key id of the KMS key to use when writing setting to the AWS Parameter store. Can be overriden with environment variable `SECRET_CONFIG_KEY_ID`.
 * **:key_alias** (String) - Alias of the KMS key to use when writing setting to the AWS Parameter store. Can be overriden with environment variable `SECRET_CONFIG_KEY_ALIAS`.
-* **:retry_count** (Integer, default=10) - Max number of retries when reading AWS SSM Parameter Store entries.
-* **:retry_max_ms** (Integer, default=3_000) - Interval in ms between retries, `sleep` is used to facilitate throttling.
+* **:retry_count** (Integer, default=25) - Max number of retries when AWS SSM Parameter Store throttles a read.
+* **:retry_max_ms** (Integer, default=10_000) - Upper bound in ms for the sleep between retries. Each retry sleeps for a random interval between 0 and this value, rather than backing off exponentially, so that many servers restarting at once spread their retries out instead of retrying in lockstep.
 * any options suported by [Aws::SSM::Client](https://docs.aws.amazon.com/sdkforruby/api/Aws/SSM/Client.html#initialize-instance_method) 
 For example, explicitly set **:credentials**:
 ~~~ruby
@@ -108,7 +108,6 @@ Priority describes when an environment variable is used as a default value, prec
  `SECRET_CONFIG_PROVIDER`  | override the provider configured for `config.secret_config.use` | override
  `SECRET_CONFIG_KEY_ID`    | encryption `key_id`                                             | default
  `SECRET_CONFIG_KEY_ALIAS` | encryption `key_alias`                                          | default
- `SECRET_CONFIG_ACCOUNT_ID`| used in `rspec` to configure AWS Account Id for role assuming   | required
 
 ### Shared configuration for development and test
 

@@ -32,7 +32,9 @@ the following type conversions are supported:
 * `boolean`
 * `symbol`
 * `json`
-* `array`
+
+Arrays are not a type. To read a single value as an array, supply a `separator` to split it on, which
+can be combined with any of the types above. See the [API](api).
 
 Supported conversions:
 * `base64`
@@ -86,7 +88,8 @@ AWS SSM Parameter Store is a very cost effective and often completely free solut
 * Includes up to 40 `GetParametersByPath` calls per second.
     * The standard limit is ample for most scenarios, since the configuration is only read on 
       startup and whenever `SecretConfig.refresh!` is called from within the application.
-    * An automated retry is built into Secret Config to retry with exponential backoffs when this limit is reached.
+    * An automated retry is built into Secret Config for when this limit is reached. Each retry waits a
+      random interval, which spreads out the retries when many servers restart at the same time.
     * This limit can be increased to 100 GetParametersByPath calls per second for an additional cost.
         * See: [AWS SSM Parameter Store throughput](https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-throughput.html)
 
