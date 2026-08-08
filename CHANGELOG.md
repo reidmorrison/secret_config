@@ -13,6 +13,17 @@ Targeted at v2, since it carries breaking changes.
 
 - Raise the supported Ruby floor to 3.2. The gemspec declared 2.3 and rubocop targeted 2.5, while
   CI has only ever tested 3.2 and up.
+- `key?` now returns true for a key that is supplied only by an environment variable, whenever
+  `SecretConfig.check_env_var?` is true. It read the in-memory cache directly, so it disagreed with
+  `[]` and `fetch`, which have always honored the override. Code that used `key?` to ask specifically
+  whether the central store holds a key, rather than whether a value is available, gets a different
+  answer now; set `SecretConfig.check_env_var = false` to restore the old meaning.
+- Reading a key that exists only as an environment variable no longer writes it into the cache. The
+  memoization was what made `key?` change its answer mid-process, and it also leaked the key into
+  `configuration` output once it had been read. As a result, a change to an environment variable that
+  has no matching key in the central store now takes effect on the next read rather than being pinned
+  to the value seen at the first read. Overrides of keys that are in the store are still applied at
+  load time, so those still require a `refresh!` to pick up a change, as before.
 
 ### Deprecated
 
