@@ -202,7 +202,8 @@ Notes on how imports resolve:
 * A path that itself contains an `__import__` can be imported. It is resolved first, so the settings it
   brings in are imported too, no matter which of the two nodes is declared first.
 * Imports must not form a cycle. Two nodes that import each other, or a node that imports itself, raise
-  `SecretConfig::ConfigurationError`.
+  `SecretConfig::ConfigurationError`, whether they refer to each other by relative or absolute path. The
+  error message lists the cycle.
 * Imports are only applied when interpolation is enabled, which is the default. The CLI leaves them
   in place on export unless `--interpolate` is supplied, which keeps an export re-importable.
 

@@ -70,7 +70,7 @@ enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set delibe
 uncovered, which inflates the total. (`cover` replaced the equivalent `track_files`, which SimpleCov now
 deprecates. The reported totals were identical either way.)
 
-The baseline is 95.95% line / 85.76% branch. Every file is at 100% except `cli.rb` (92.0%, the uncovered
+The baseline is 95.98% line / 85.87% branch. Every file is at 100% except `cli.rb` (92.0%, the uncovered
 parts are `--console`, the SSM branches of `#provider_instance`, and the stdin/stdout ends of `read_file`
 and `write_file`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback), and
 `providers/ssm.rb` (97.3%, the uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`).
@@ -132,7 +132,15 @@ so do not add public helper methods there casually. `$${...}` escapes interpolat
 
 A key named `__import__` copies another subtree into its parent node. A relative import value is resolved
 against the already-parsed tree; an absolute one triggers a second provider fetch. Existing keys always win
-over imported ones, and imports cannot reference other imports.
+over imported ones. An imported subtree may itself contain imports: those are resolved first, in either
+declaration order.
+
+Cycles raise `ConfigurationError`, guarded in two places, since the two kinds of import recurse through
+different code. `Parser#apply_import` carries a `chain` of the import keys it is resolving, which covers
+relative imports within one parser. Absolute imports leave the parser entirely, so `Registry#fetch_path`
+threads a `fetch_chain` of the paths already being fetched into each `Parser` it builds, and
+`Parser#fetch_absolute` raises when a path recurs. Match paths exactly there: a path nested under one
+already being fetched is an ordinary import, not a cycle.
 
 ### Value handling
 
@@ -186,6 +194,9 @@ backends require their gem inside a `begin/rescue LoadError` that re-raises with
 Fixtures live in [test/config/application.yml](test/config/application.yml), which exercises interpolation,
 `__import__`, node-plus-branch values, and comma-separated lists. Registry tests build a
 `Providers::File` against that file with path `/test/my_application` or `/test/other_application`.
+[test/config/imports.yml](test/config/imports.yml) holds the `__import__` resolution-order and cycle
+fixtures. Each root in it is read on its own, so the deliberately invalid roots there (`circular`,
+`self_referencing`, `absolute_a`/`absolute_b`, `absolute_self`) do not affect the valid ones.
 
 `InMemoryProvider` in [test/test_helper.rb](test/test_helper.rb) is a writable provider that keeps the flat
 key/value hash in memory, which is convenient when a test wants to assert on exactly what was written.

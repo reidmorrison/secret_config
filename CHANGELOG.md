@@ -81,6 +81,12 @@ Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress these warnings
   skip-unchanged-keys optimization, but also defeated the guard that leaves an existing generated value
   alone. Forcing an import to re-encrypt under a new KMS key, the documented use case, silently replaced
   every `$(random)` secret in the source with a new one.
+- A cycle in `__import__` values that runs through an absolute path now raises
+  `SecretConfig::ConfigurationError` with the cycle in the message, instead of `SystemStackError`.
+  Every absolute import is resolved by a separate provider fetch that built its own parser, so the
+  cycle tracking that already guarded relative imports could not see across the fetch. The paths
+  being fetched are now threaded through, and only a path that recurs raises: importing the same
+  path from two places, or importing a path nested under one already fetched, still works.
 - An `__import__` of a node that is itself an import now resolves regardless of the order the two
   nodes are declared in. Previously the unresolved `__import__` key was copied across instead of the
   settings behind it, leaving a reserved key visible in the registry. Circular imports raise
