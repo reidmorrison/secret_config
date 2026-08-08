@@ -201,9 +201,13 @@ module SecretConfig
         end
 
         opts.on "--random_size INTEGER", Integer,
-                "For --import only. Default size in bytes to use when generating values when " \
-                "__generate__ is encountered in the source. Override per key with __generate__:size. " \
-                "Default: 32" do |random_size|
+                "Deprecated. For --import only. Default size in bytes to use when generating values " \
+                "when __generate__ is encountered in the source. Supply the size on each value instead, " \
+                "as __generate__:size. Default: 32" do |random_size|
+          SecretConfig.deprecation_warning(
+            "`--random_size` is deprecated. Supply the size on each value instead, as " \
+            "`#{SecretConfig::GENERATE}:#{random_size}`, which sets it per key rather than for the whole import."
+          )
           @random_size = random_size
         end
 

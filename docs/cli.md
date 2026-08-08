@@ -25,7 +25,7 @@ secret-config [options]
         --force                      For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key.
         --key_id KEY_ID              For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key.
         --key_alias KEY_ALIAS        For --import only. Encrypt config settings with this AWS KMS alias.
-        --random_size INTEGER        For --import only. Default size in bytes to use when generating values when __generate__ is encountered in the source. Override per key with __generate__:size. Default: 32
+        --random_size INTEGER        Deprecated. For --import only. Default size in bytes to use when generating values when __generate__ is encountered in the source. Supply the size on each value instead, as __generate__:size. Default: 32
     -v, --version                    Display Secret Config version.
     -h, --help                       Prints this help.
 ~~~
@@ -123,8 +123,8 @@ Existing values are left alone, so re-running the import does not replace a pass
 generated. This holds under `--force` as well: forcing an import re-writes every key so that it is
 re-encrypted under a new KMS key, but it never regenerates a value that is already present.
 
-By default the length of the generated value is 32 bytes, use `--random_size` to change the default for
-the whole import. To override it for a single key, supply the size on the token itself:
+By default the length of the generated value is 32 bytes. To change it, supply the size on the token
+itself, which sets it for that key alone:
 
     mysql:
       password: __generate__        # 32 bytes
@@ -149,11 +149,16 @@ Both produce a random value, and they behave very differently:
 Use `__generate__` for anything that has to stay the same after it is generated, such as a database
 password. `${random}` is only suitable for values that are genuinely disposable within a single process.
 
-#### Deprecated: `$(random)`
+#### Deprecated: `$(random)` and `--random_size`
 
 `__generate__` was previously spelled `$(random)`, which was too easily confused with the `${random}`
-interpolation above. The old spelling still works and still honors `--random_size`, but it prints a
-deprecation warning on stderr and will be removed in the next major release. It does not accept a
-per-key size. Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress the warning while
-migrating.
+interpolation above. The old spelling still works, but it prints a deprecation warning on stderr and will
+be removed in the next major release. It does not accept a per-key size.
+
+`--random_size` is deprecated alongside it. It set the size for every generated value in the import, so
+two keys needing different sizes meant two separate imports. `__generate__:size` replaces it and is set
+per key. The flag still works and still sets the default for values written as a bare `__generate__`, but
+warns when supplied.
+
+Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress both warnings while migrating.
 

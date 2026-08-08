@@ -138,7 +138,26 @@ class CLITest < Minitest::Test
       end
 
       it "coerces --random_size to an integer" do
-        assert_equal 64, SecretConfig::CLI.new(["--random_size", "64"]).random_size
+        cli = nil
+        capture_io { cli = SecretConfig::CLI.new(["--random_size", "64"]) }
+
+        assert_equal 64, cli.random_size
+      end
+
+      it "warns that --random_size is deprecated, pointing at the per-key form" do
+        SecretConfig.instance_variable_set(:@deprecation_warnings, Set.new)
+        _, err = capture_io { SecretConfig::CLI.new(["--random_size", "64"]) }
+
+        assert_includes err, "Deprecation"
+        assert_includes err, "--random_size"
+        assert_includes err, "__generate__:64"
+      end
+
+      it "does not warn when --random_size is not supplied" do
+        SecretConfig.instance_variable_set(:@deprecation_warnings, Set.new)
+        _, err = capture_io { SecretConfig::CLI.new(["--version"]) }
+
+        assert_empty err
       end
 
       it "defaults the filter and interpolation flags to off" do
@@ -187,8 +206,11 @@ class CLITest < Minitest::Test
       let(:provider) { InMemoryProvider.new }
 
       # `provider_instance` memoizes, and only builds :ssm, so inject a writable provider instead.
+      # Parsing is wrapped because --random_size emits a deprecation warning on stderr.
       def build_cli(argv)
-        SecretConfig::CLI.new(argv).tap { |cli| cli.instance_variable_set(:@provider_instance, provider) }
+        cli = nil
+        capture_io { cli = SecretConfig::CLI.new(argv) }
+        cli.tap { |instance| instance.instance_variable_set(:@provider_instance, provider) }
       end
 
       def set_config(cli, config, current_values, force: false)
