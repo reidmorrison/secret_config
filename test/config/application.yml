@@ -59,7 +59,6 @@ test:
         key:     key0
 
     mysql:
-#      database:   "${fetch: /test/my_application/mysql/database }"
       username:   other
       password:   otherrules
       host:       "${hostname}"

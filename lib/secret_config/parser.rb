@@ -5,8 +5,6 @@ module SecretConfig
     def initialize(path, registry, interpolate: true)
       @path         = path
       @registry     = registry
-      @fetch_list   = {}
-      @import_list  = {}
       @tree         = {}
       @interpolator = interpolate ? SettingInterpolator.new : nil
     end
@@ -27,10 +25,6 @@ module SecretConfig
 
     private
 
-    # def apply_fetches
-    #   tree[key] = relative_key?(fetch_key) ? registry[fetch_key] : registry.provider.fetch(fetch_key)
-    # end
-
     # Import from the current registry as well as new fetches.
     #
     # Notes:
@@ -43,8 +37,6 @@ module SecretConfig
         import_key = tree.delete(key)
         key, = ::File.split(key)
         key = nil if key == "."
-
-        # binding.irb
 
         # With a relative key, look for the values in the current registry.
         # With an absolute key call the provider and fetch the value directly.

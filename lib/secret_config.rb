@@ -38,9 +38,24 @@ module SecretConfig
   end
 
   # Which provider to use along with any arguments
-  # The path will be overriden by env var `SECRET_CONFIG_PATH` if present.
-  def self.use(provider, path: nil, **args)
-    @registry = SecretConfig::Registry.new(path: path, provider: provider, provider_args: args)
+  #
+  # Parameters:
+  #   path: [String]
+  #     The root path to read the configuration from.
+  #     Overriden by env var `SECRET_CONFIG_PATH` if present.
+  #
+  #   interpolate: [true|false]
+  #     Whether to evaluate `${...}` interpolations and `__import__` when reading the configuration.
+  #     Default: true
+  #
+  # Any remaining arguments are passed to the provider when it is instantiated.
+  def self.use(provider, path: nil, interpolate: true, **args)
+    @registry = SecretConfig::Registry.new(
+      path:          path,
+      provider:      provider,
+      provider_args: args,
+      interpolate:   interpolate
+    )
   end
 
   # Fetch configuration in a block by supplying the root path once.

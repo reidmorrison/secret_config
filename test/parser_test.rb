@@ -19,37 +19,8 @@ class ParserTest < Minitest::Test
       SecretConfig::Registry.new(path: path, provider: provider)
     end
 
-    # let :parser do
-    #   SecretConfig::Parser.new(path, registry)
-    # end
-
-    #
-    # Retrieve values elsewhere in the registry.
-    # Paths can be relative to the current root, or absolute paths outside the current root.
-    #   ${fetch:key}      # Fetches a single value from a relative or absolute path
-    # Return the value of the supplied key.
-    #
-    # With a relative key, look for the value in the current registry.
-    # With an absolute key call the provider and fetch the value directly.
-    #
-    # Notes:
-    # - A lot of absolute key lookups can be expensive since each one is a separate call.
-    # def fetch(key)
-    #   fetch_list[key] = key
-    # end
-    # describe "#fetch" do
-    #   it "inside current path" do
-    #
-    #   end
-    #
-    #   it "outside current path" do
-    #
-    #   end
-    # end
-
-    #   ${import:path}    # Imports a path of keys and values into the current path
-    # Replace the current value with a tree of values with the supplied path.
-    #
+    # `__import__` replaces its own key with a tree of values read from the supplied path.
+    # The path can be relative to the current root, or an absolute path outside the current root.
     describe "#import" do
       it "removes import key" do
         refute registry.key?("symmetric_encryption/__import__"), -> { registry.configuration(filters: nil).ai }

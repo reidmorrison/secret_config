@@ -127,31 +127,36 @@ Still open: whether the near-identical syntax is acceptable at all. Changing eit
 and would need a v2 upgrade note, in the style of the `%{}` to `${}` migration already described in
 [README.md](README.md).
 
-### 11. `__import__` is effectively undocumented
+### 11. `__import__` is effectively undocumented — RESOLVED
 
-Its only mention across all of `docs/` is inside the `--interpolate` flag description in
-[docs/cli.md](docs/cli.md). The same applies to `__value__` (`NODE_KEY`), which users hit as soon as a
+Its only mention across all of `docs/` was inside the `--interpolate` flag description in
+[docs/cli.md](docs/cli.md). The same applied to `__value__` (`NODE_KEY`), which users hit as soon as a
 node is both a value and a branch.
 
-Decide whether `__import__` is deliberately unadvertised because of its stated limits (imports cannot
-reference other imports) or whether this is simply a documentation gap.
+Resolved as a documentation gap: [docs/guide.md](docs/guide.md) now covers both, including how relative
+and absolute imports resolve, that existing keys win, and that imports are only applied when
+interpolation is enabled. Writing it up turned up item 17 below.
 
-### 12. `${fetch: ...}` is half-implemented
+### 12. `${fetch: ...}` is half-implemented — RESOLVED
 
-`apply_fetches` is commented out in [lib/secret_config/parser.rb:32-34](lib/secret_config/parser.rb#L32-L34),
-along with a commented-out `"${fetch: /test/my_application/mysql/database }"` in
-[test/config/application.yml](test/config/application.yml). There is also a leftover `binding.irb` comment
-in `apply_imports`. Either finish the feature or remove the remnants.
+`apply_fetches` was commented out in [lib/secret_config/parser.rb](lib/secret_config/parser.rb), along
+with a commented-out `"${fetch: /test/my_application/mysql/database }"` in
+[test/config/application.yml](test/config/application.yml), a commented-out `fetch` sketch in
+[test/parser_test.rb](test/parser_test.rb), and a leftover `binding.irb` comment in `apply_imports`.
 
-### 13. `interpolate:` is unreachable through the public API
+Resolved by removing the remnants rather than finishing the feature, along with the `@fetch_list` and
+`@import_list` ivars, which nothing read. `__import__` already covers importing a subtree; nothing in the
+docs or the CLI ever advertised `${fetch:}`.
 
-`Registry` accepts `interpolate:`, but `SecretConfig.use(provider, path:, **args)` funnels everything
-other than `path` into `provider_args`, so it reaches the provider constructor instead:
+### 13. `interpolate:` is unreachable through the public API — RESOLVED
+
+`Registry` accepted `interpolate:`, but `SecretConfig.use(provider, path:, **args)` funnelled everything
+other than `path` into `provider_args`, so it reached the provider constructor instead:
 
     use(interpolate: false) => ArgumentError: unknown keyword: :interpolate
 
-The concept is already user facing via the CLI's `--interpolate`. Consider extracting `interpolate:`
-explicitly in `use`.
+Resolved by extracting `interpolate:` explicitly in `use`, defaulting to `true`. Additive, so no existing
+call changes behavior.
 
 ### 14. Supported Ruby version floor is inconsistent **[breaking]** — RESOLVED
 
@@ -169,10 +174,37 @@ and `parser` is a 78 line method.
 The exclusions are there because the command implementations have no test coverage, so a refactor cannot
 be verified. Cover them first, then split the class and remove the exclusions.
 
-### 16. No CHANGELOG.md
+### 16. No CHANGELOG.md — RESOLVED
 
-The gemspec metadata omits `changelog_uri` because there is no changelog to point at, unlike the sibling
-gems. Worth adding before the v2 release, since v2 carries breaking changes that users need to read about.
+The gemspec metadata omitted `changelog_uri` because there was no changelog to point at, unlike the
+sibling gems.
+
+Resolved by adding [CHANGELOG.md](CHANGELOG.md), reconstructed from the git history and the released gem
+versions, with an Unreleased section for the v2 work. `changelog_uri` now points at it.
+
+### 17. A forward `__import__` reference leaks an unresolved `__import__` key
+
+Found while documenting item 11. `Parser#apply_imports` walks the keys once, in read order, so an import
+of a node whose own `__import__` has not been resolved yet copies the literal `__import__` key across
+instead of the settings behind it:
+
+~~~yaml
+early:
+  __import__: later
+later:
+  __import__: base
+~~~
+
+    early  => {"__import__" => "base"}    # no settings imported, and a reserved key left in the registry
+    later  => {"host" => ..., "port" => ...}
+
+Reversing the order of the two nodes resolves both correctly, so the outcome depends on the order the
+provider yields keys in. Two separate problems: chained imports are order-dependent, and the failure mode
+leaves a reserved `__import__` key visible in the registry rather than raising.
+
+The code comment in `apply_imports` already notes "imports cannot reference other imports at this time",
+so the ordering limit is known. At minimum the leaked key should be dropped, or the case detected and
+raised on. [docs/guide.md](docs/guide.md) currently tells users not to chain imports.
 
 ## Not tracked here
 
