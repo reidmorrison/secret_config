@@ -70,7 +70,7 @@ enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set delibe
 uncovered, which inflates the total. (`cover` replaced the equivalent `track_files`, which SimpleCov now
 deprecates. The reported totals were identical either way.)
 
-The baseline is 95.98% line / 85.87% branch. Every file is at 100% except `cli.rb` (92.0%, the uncovered
+The baseline is 96.00% line / 85.87% branch. Every file is at 100% except `cli.rb` (92.0%, the uncovered
 parts are `--console`, the SSM branches of `#provider_instance`, and the stdin/stdout ends of `read_file`
 and `write_file`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback), and
 `providers/ssm.rb` (97.3%, the uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`).
@@ -209,10 +209,9 @@ touches AWS and runs everywhere; use it for new SSM coverage.
 [test/providers/ssm_test.rb](test/providers/ssm_test.rb) does a live round trip and skips unless
 `AWS_ACCESS_KEY_ID` is set, which is the source of the suite's 2 skips.
 
-Some tests deliberately assert current, undesired behavior (the `fetch` block precedence in
-[test/registry_test.rb](test/registry_test.rb)). They carry a comment pointing at
-[TECH_DEBT.md](TECH_DEBT.md); update them when fixing the underlying issue rather than treating a failure
-there as a regression.
+A test that deliberately asserts current, undesired behavior carries a comment pointing at
+[TECH_DEBT.md](TECH_DEBT.md); update it when fixing the underlying issue rather than treating a failure
+there as a regression. There are none at present.
 
 [test/test_helper.rb](test/test_helper.rb) requires `cgi/escape` before `amazing_print` on purpose: Ruby 4.0
 removed `cgi` from stdlib and the shim warns if loaded reentrantly. Keep that require first.

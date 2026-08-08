@@ -42,6 +42,14 @@ SecretConfig.fetch("logger/level", default: "info")
 # => "info"
 ~~~
 
+A block can be supplied instead, when the default is expensive to calculate, or is only valid when the
+key really is missing. It is called only when the key is not found, and takes precedence over `default:`:
+
+~~~ruby
+SecretConfig.fetch("logger/level") { ENV.fetch("LOG_LEVEL", "info") }
+# => "info"
+~~~
+
 Since AWS SSM Parameter store and environment variables only support string values,
 it is neccessary to convert the string back to the type required by the program.
 

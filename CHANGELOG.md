@@ -24,6 +24,10 @@ Targeted at v2, since it carries breaking changes.
   has no matching key in the central store now takes effect on the next read rather than being pinned
   to the value seen at the first read. Overrides of keys that are in the store are still applied at
   load time, so those still require a `refresh!` to pick up a change, as before.
+- `fetch` now calls a supplied block when the key is missing, whether or not `default:` was also
+  supplied. The missing-key check ran first, so a block on its own raised `MissingMandatoryKey` and
+  was only ever consulted alongside a `default:` that it then took precedence over. Code that relies
+  on `fetch(key) { ... }` raising gets the block's value instead now; drop the block to keep raising.
 
 ### Deprecated
 
