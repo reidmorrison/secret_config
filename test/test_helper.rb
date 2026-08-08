@@ -12,7 +12,7 @@ SimpleCov.start do
   enable_coverage :branch
   # cli.rb and railtie.rb are autoloaded, so without this they are absent from the report entirely
   # rather than counted as uncovered, which overstates the total.
-  track_files "lib/**/*.rb"
+  cover "lib/**/*.rb"
 end
 
 require "yaml"

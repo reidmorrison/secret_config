@@ -65,16 +65,21 @@ rubocop is not repeated on every matrix entry; `TargetRubyVersion` decides which
 result does not depend on the Ruby it runs on.
 
 SimpleCov runs on every test run and writes `coverage/index.html` (gitignored). No minimum threshold is
-enforced, so coverage cannot fail the build. `track_files "lib/**/*.rb"` is set deliberately: `cli.rb` and
+enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set deliberately: `cli.rb` and
 `railtie.rb` are autoloaded, and without it they are omitted from the report rather than counted as
-uncovered, which inflates the total.
+uncovered, which inflates the total. (`cover` replaced the equivalent `track_files`, which SimpleCov now
+deprecates. The reported totals were identical either way.)
 
-The baseline is 77.13% line / 57.02% branch. Every file is at 100% except `cli.rb` (48.4%, argument
-parsing is covered but the command implementations are not), `providers/file.rb` (88.0%, the uncovered
-lines are the broken `#fetch` in TECH_DEBT.md and a Psych 3 fallback), and `providers/ssm.rb` (97.2%, the
+The baseline is 80.20% line / 66.12% branch. Every file is at 100% except `cli.rb` (54.3%, argument
+parsing and `#set_config` are covered but the remaining command implementations are not),
+`providers/file.rb` (96.2%, the uncovered line is a Psych 3 fallback), and `providers/ssm.rb` (97.3%, the
 uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`). `railtie.rb` and `version.rb` report
 0% for structural reasons: the railtie is only loaded under Rails, and the gemspec loads `version.rb`
 before SimpleCov starts.
+
+Measure the baseline with a cleared `coverage/` directory. SimpleCov merges resultsets from separate
+suites within a timeout window, so a stray `ruby -Itest` run leaves stale data behind that skews the next
+`rake test` figure in either direction.
 
 Solargraph is configured by [.solargraph.yml](.solargraph.yml). It indexes `lib/` and `test/` and excludes
 the Jekyll docs, and reports rubocop diagnostics through the language server.
@@ -89,8 +94,8 @@ deliberate and documented in place:
 
 - `Naming/PredicateMethod` is disabled inline on `Registry#refresh!`, which returns `true` but cannot be
   renamed because it is public API delegated from `SecretConfig.refresh!`.
-- The `Metrics/*` cops exclude `cli.rb`. Its command implementations have no test coverage, so refactoring
-  for the metrics is not safe yet. See [TECH_DEBT.md](TECH_DEBT.md).
+- The `Metrics/*` cops exclude `cli.rb`. Apart from `#set_config`, its command implementations have no
+  test coverage, so refactoring for the metrics is not safe yet. See [TECH_DEBT.md](TECH_DEBT.md).
 
 ## Architecture
 
