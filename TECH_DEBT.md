@@ -10,23 +10,7 @@ versioning section of [CLAUDE.md](CLAUDE.md).
 
 ## Bugs
 
-### 1. `key?` and `[]` disagree about env-var-only keys **[breaking]**
-
-`Registry#[]` memoizes an env-var override into the cache on a miss, but `Registry#key?` reads the cache
-directly, so the answer changes depending on whether the key has been read yet.
-
-    key? before read: false
-    [] read: "x"
-    key? after read: true
-
-This has a real consequence for the key-rotation example in [docs/config.md](docs/config.md), which gates
-the secondary cipher on `key?('symmetric_encryption/old/key')`. Rotating keys via
-`SYMMETRIC_ENCRYPTION_OLD_KEY` alone yields `false` and no secondary cipher, even though `fetch` on the
-same key returns the value.
-
-Decide whether `key?` should consult env vars when `check_env_var?` is true.
-
-### 2. Mutually recursive absolute imports overflow the stack
+### 1. Mutually recursive absolute imports overflow the stack
 
 An absolute `__import__` is resolved by `Registry#fetch_path`, which builds a fresh `Parser`, so the cycle
 tracking that guards relative imports does not cross that boundary:
@@ -47,7 +31,7 @@ The relative equivalent raises `ConfigurationError` with the cycle in the messag
 very differently. Fixing it means threading the set of absolute paths already being fetched through
 `Registry#fetch_path` into the `Parser` it creates, and raising when a path recurs.
 
-### 3. `fetch` consults a block only when a default is also supplied
+### 2. `fetch` consults a block only when a default is also supplied
 
 The missing-key check runs before the block, so a block on its own does not satisfy a missing key:
 
@@ -60,7 +44,7 @@ Changing this is **[breaking]** for anyone relying on the current raise. Asserte
 
 ## Design questions
 
-### 4. `cli.rb` is excluded from the `Metrics/*` cops
+### 3. `cli.rb` is excluded from the `Metrics/*` cops
 
 `Metrics/AbcSize`, `ClassLength`, `CyclomaticComplexity`, `MethodLength`, and `BlockLength` all exclude
 `cli.rb` in [.rubocop.yml](.rubocop.yml). Against the default config it is 526 lines with a class body of

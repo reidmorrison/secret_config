@@ -70,7 +70,7 @@ enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set delibe
 uncovered, which inflates the total. (`cover` replaced the equivalent `track_files`, which SimpleCov now
 deprecates. The reported totals were identical either way.)
 
-The baseline is 95.95% line / 85.39% branch. Every file is at 100% except `cli.rb` (92.0%, the uncovered
+The baseline is 95.95% line / 85.76% branch. Every file is at 100% except `cli.rb` (92.0%, the uncovered
 parts are `--console`, the SSM branches of `#provider_instance`, and the stdin/stdout ends of `read_file`
 and `write_file`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback), and
 `providers/ssm.rb` (97.3%, the uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`).
@@ -142,7 +142,10 @@ splitting into an array of converted elements. Missing keys raise `MissingMandat
 a block is supplied.
 
 Environment variables override the central store when `SecretConfig.check_env_var?` is true (the default).
-The name is the relative key upcased with `/` replaced by `_`: `mysql/host` → `MYSQL_HOST`.
+The name is the relative key upcased with `/` replaced by `_`: `mysql/host` → `MYSQL_HOST`. Overrides of
+keys that exist in the store are applied once, in `refresh!`. A key that exists only as an environment
+variable is resolved on every read instead, and is never written into the cache, so `key?`, `[]`, and
+`fetch` agree about it and `configuration` never reports it.
 
 `SecretConfig.filters` (default: regexes matching password/key/passphrase/secret/pwd) mask values as
 `[FILTERED]` in `configuration` output and CLI exports. Filtering applies only to those dumps, never to

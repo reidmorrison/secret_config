@@ -38,16 +38,18 @@ module SecretConfig
     # Returns [String] configuration value for the supplied key, or nil when missing.
     def [](key)
       value = cache[key]
-      if value.nil? && SecretConfig.check_env_var?
-        value      = env_var_override(key, value)
-        cache[key] = value unless value.nil?
-      end
+      value = env_var_value(key) if value.nil?
       value&.to_s
     end
 
-    # Returns [String] configuration value for the supplied key, or nil when missing.
+    # Returns [true|false] whether a value is available for the supplied key.
+    #
+    # A key that is present only as an environment variable is included when
+    # `SecretConfig.check_env_var?` is true, so that `key?` agrees with `[]` and `fetch`.
     def key?(key)
-      cache.key?(key)
+      return true if cache.key?(key)
+
+      !env_var_value(key).nil?
     end
 
     # Returns [String] configuration value for the supplied key
@@ -126,10 +128,15 @@ module SecretConfig
     # Returns the value from an env var if it is present,
     # Otherwise the value is returned unchanged.
     def env_var_override(key, value)
-      return value unless SecretConfig.check_env_var?
+      env_var_value(key) || value
+    end
 
-      env_var_name = key.upcase.gsub("/", "_")
-      ENV[env_var_name] || value
+    # Returns [String] the environment variable override for the supplied key,
+    # or nil when there is none, or when env var checking is disabled.
+    def env_var_value(key)
+      return nil unless SecretConfig.check_env_var?
+
+      ENV.fetch(key.upcase.gsub("/", "_"), nil)
     end
 
     # Add the path to the path if it is a relative path.

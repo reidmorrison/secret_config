@@ -92,12 +92,17 @@ SecretConfig.fetch("symmetric_encryption/iv", encoding: :base64)
 
 ## Key presence
 
-Returns whether a key is present in the registry:
+Returns whether a value is available for a key:
 
 ~~~ruby
 SecretConfig.key?("logger/level")
 # => true
 ~~~
+
+A key supplied only by an environment variable counts as present, so that `key?` agrees with `[]` and
+`fetch`, both of which return the override. Setting `LOGGER_LEVEL` makes `key?("logger/level")` true even
+when the central store has no such key. Set `SecretConfig.check_env_var = false` to consider the central
+store alone.
 
 ## Write values
 

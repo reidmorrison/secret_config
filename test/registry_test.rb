@@ -69,6 +69,39 @@ class RegistryTest < Minitest::Test
       it "returns nil with missing full key" do
         refute registry.key?("/test/invalid/path")
       end
+
+      describe "with an environment variable override" do
+        before do
+          ENV["MYSQL_UNKNOWN"] = "from_env"
+        end
+
+        after do
+          ENV["MYSQL_UNKNOWN"]       = nil
+          SecretConfig.check_env_var = true
+        end
+
+        it "has a key that is only present as an environment variable" do
+          assert registry.key?("mysql/unknown")
+        end
+
+        it "returns the same answer before and after the key has been read" do
+          assert registry.key?("mysql/unknown")
+          assert_equal "from_env", registry["mysql/unknown"]
+          assert registry.key?("mysql/unknown")
+        end
+
+        it "does not add the key to the configuration when it is read" do
+          assert_equal "from_env", registry["mysql/unknown"]
+
+          assert_nil registry.configuration.dig("mysql", "unknown")
+        end
+
+        it "returns false when environment variable checking is disabled" do
+          SecretConfig.check_env_var = false
+
+          refute registry.key?("mysql/unknown")
+        end
+      end
     end
 
     describe "#[]" do
