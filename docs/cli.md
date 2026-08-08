@@ -184,14 +184,26 @@ mysql:
 
 The value must be exactly `__generate__`, ignoring surrounding spaces.
 
-**Keep the template as a file, not as a path.** `__generate__` is materialized during the import, so the
-path it was imported into holds a real password from then on, and Step 7's path-to-path copy duplicates
-that password rather than generating a new one. Import the template file into each tenant instead:
+**The token has to survive to the import that creates the tenant.** `__generate__` is materialized by
+the import that reads it, so whatever it is imported into holds a real password from then on. Copying
+that path with Step 7 then duplicates the password rather than generating a new one.
+
+There are two ways to keep the token intact, and either works:
+
+Import a template **file** into each tenant:
 
     secret-config --import /tenant73/my_application --file template.yml
     secret-config --import /tenant74/my_application --file template.yml
 
-Those two tenants get different passwords, and share everything else the template specifies.
+Or keep a master **path** whose value is the literal token, written with `--set` so that no import
+materializes it, and copy that:
+
+    secret-config --set /common/my_application/mysql/password=__generate__
+    secret-config --import /tenant73/my_application --path /common/my_application
+    secret-config --import /tenant74/my_application --path /common/my_application
+
+Either way the two tenants get different passwords and share everything else. What does not work is
+copying from a path that was itself created by importing the template, since the token is gone by then.
 
 Existing values are left alone, so re-running the import does not replace a password that was already
 generated. This holds under `--force` as well: forcing an import rewrites every key so that it is
@@ -239,15 +251,13 @@ encrypted with. Generated values are preserved, as covered in Step 8.
 
     secret-config --console
 
-Intended to open an interactive Ruby session with the registry loaded, for exploring a store.
+Opens an interactive Ruby session with the registry loaded, for exploring a store.
 
-**This currently raises `NameError: uninitialized constant SecretConfig::CLI::IRB`** on every provider,
-because IRB is no longer required. Until that is fixed, get the same thing from a plain IRB session:
+IRB stops being a default gem in Ruby 4.0, so it is loaded only when this command runs. If it is not
+available, add it:
 
 ~~~ruby
-require "secret_config"
-SecretConfig.use(:file, path: "/development")
-SecretConfig.configuration
+gem "irb"
 ~~~
 
 ## Deprecated: `$(random)` and `--random_size`

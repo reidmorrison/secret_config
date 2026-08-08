@@ -22,6 +22,8 @@ require "securerandom"
 #                       # Values are stripped of leading and trailing spaces.
 module SecretConfig
   class SettingInterpolator < StringInterpolator
+    DEFAULT_RANDOM_SIZE = 32
+
     def date(format = "%Y%m%d")
       Date.today.strftime(format)
     end
@@ -48,7 +50,13 @@ module SecretConfig
       $$
     end
 
-    def random(size = 32)
+    # `size` arrives as a String, since every interpolation argument is parsed out of the value, so it
+    # has to be converted before SecureRandom will accept it. A near miss such as `${random:abc}` raises
+    # rather than silently generating nothing, the way `__generate__:abc` does on import.
+    def random(size = DEFAULT_RANDOM_SIZE)
+      size = Integer(size.to_s, exception: false)
+      raise(ConfigurationError, "Size must be a positive integer when using random") unless size&.positive?
+
       SecureRandom.urlsafe_base64(size)
     end
 

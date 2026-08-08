@@ -74,6 +74,17 @@ Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress these warnings
 
 ### Fixed
 
+- `${random:size}` raised `NoMethodError` instead of generating a value. Every interpolation argument
+  is parsed out of the value as a String, and `SecureRandom.urlsafe_base64` requires an Integer. The
+  size is now converted, and a near miss such as `${random:abc}` or `${random:0}` raises
+  `ConfigurationError` rather than silently generating nothing, matching what `__generate__:abc` does
+  on import. The test covering this stubbed `SecureRandom.urlsafe_base64`, which swallowed the argument
+  and hid the failure; it no longer stubs it.
+- `secret-config --console` raised `NameError: uninitialized constant SecretConfig::CLI::IRB`. The
+  `require "irb"` was removed because IRB stops being a default gem in Ruby 4.0, which leaves an
+  unconditional require warning under bundler, but the `IRB.start` call it fed was left behind. IRB is
+  now required inside the command, so it is loaded only when it is used, and a missing IRB raises a
+  `LoadError` naming the gem to add.
 - `secret-config --set KEY=VALUE` no longer truncates values containing `=`. Base64 encryption keys
   and initialization vectors are padded with `=` and were being silently written without the padding.
 - `--file` no longer declares the short option `-f`, which was already taken by `--fetch`.
