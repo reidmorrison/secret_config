@@ -29,6 +29,11 @@ Targeted at v2, since it carries breaking changes.
   OptionParser gave `-f` to `--fetch`, so no working invocation changes meaning.
 - `Providers::File#fetch` and the "path not found" error in `Providers::File#each` raised `NameError`
   instead of doing their job.
+- `secret-config --import --force` no longer regenerates values that are already present. `--force`
+  passed an empty hash in place of the current values, which was intended only to defeat the
+  skip-unchanged-keys optimization, but also defeated the guard that leaves an existing generated value
+  alone. Forcing an import to re-encrypt under a new KMS key, the documented use case, silently replaced
+  every `$(random)` secret in the source with a new one.
 - An `__import__` of a node that is itself an import now resolves regardless of the order the two
   nodes are declared in. Previously the unresolved `__import__` key was copied across instead of the
   settings behind it, leaving a reserved key visible in the registry. Circular imports raise

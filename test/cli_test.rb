@@ -181,5 +181,73 @@ class CLITest < Minitest::Test
         assert_equal "Invalid provider: file", error.message
       end
     end
+
+    describe "#set_config" do
+      let(:path) { "/test/my_application" }
+      let(:provider) { InMemoryProvider.new }
+
+      # `provider_instance` memoizes, and only builds :ssm, so inject a writable provider instead.
+      def build_cli(argv)
+        SecretConfig::CLI.new(argv).tap { |cli| cli.instance_variable_set(:@provider_instance, provider) }
+      end
+
+      def set_config(cli, config, current_values, force: false)
+        capture_io { cli.send(:set_config, config, path, current_values, force: force) }
+      end
+
+      it "skips unchanged values" do
+        cli = build_cli(["--import", path])
+        set_config(cli, {"mysql" => {"host" => "localhost"}}, {"#{path}/mysql/host" => "localhost"})
+
+        assert_empty provider.hash
+      end
+
+      it "writes unchanged values when forced, so they are re-encrypted under a new KMS key" do
+        cli = build_cli(["--import", path, "--force"])
+        set_config(cli, {"mysql" => {"host" => "localhost"}}, {"#{path}/mysql/host" => "localhost"}, force: true)
+
+        assert_equal({"#{path}/mysql/host" => "localhost"}, provider.hash)
+      end
+
+      it "generates a value for $(random) when the key is absent" do
+        cli = build_cli(["--import", path])
+        set_config(cli, {"mysql" => {"password" => SecretConfig::RANDOM}}, {})
+
+        generated = provider.hash["#{path}/mysql/password"]
+
+        refute_equal SecretConfig::RANDOM, generated
+        refute_nil generated
+      end
+
+      it "leaves an existing $(random) value alone" do
+        cli = build_cli(["--import", path])
+        set_config(cli, {"mysql" => {"password" => SecretConfig::RANDOM}},
+                   {"#{path}/mysql/password" => "existing"})
+
+        assert_empty provider.hash
+      end
+
+      # --force must not regenerate persisted secrets. It exists so that unchanged keys are re-written and
+      # therefore re-encrypted under a new KMS key; regenerating during that would silently invalidate
+      # every generated value in the source.
+      it "leaves an existing $(random) value alone when forced" do
+        cli = build_cli(["--import", path, "--force"])
+        set_config(cli, {"mysql" => {"password" => SecretConfig::RANDOM}},
+                   {"#{path}/mysql/password" => "existing"}, force: true)
+
+        assert_empty provider.hash
+      end
+
+      it "reports a forced key as changed rather than added" do
+        cli = build_cli(["--import", path, "--force"])
+        out, = capture_io do
+          cli.send(:set_config, {"mysql" => {"host" => "localhost"}}, path,
+                   {"#{path}/mysql/host" => "localhost"}, force: true)
+        end
+
+        assert_includes out, "* #{path}/mysql/host"
+        refute_includes out, "+ #{path}/mysql/host"
+      end
+    end
   end
 end

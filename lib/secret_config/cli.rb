@@ -332,13 +332,16 @@ module SecretConfig
       write_file(file_name, data)
     end
 
-    def set_config(config, path, current_values = {})
+    # `force` writes every key, including unchanged ones, so that they are re-encrypted under a new KMS key.
+    # It must not affect anything else that reads `current_values`, in particular the `RANDOM` guard below:
+    # regenerating a persisted secret during a key rotation would silently invalidate it.
+    def set_config(config, path, current_values = {}, force: false)
       Utils.flatten_each(config, path) do |key, value|
         next if value.nil?
-        next if current_values[key].to_s == value.to_s
+        next if !force && current_values[key].to_s == value.to_s
 
         if value.to_s.strip == RANDOM
-          next if current_values[key]
+          next if current_values.key?(key)
 
           value = random_password
         elsif value == FILTERED
@@ -399,7 +402,7 @@ module SecretConfig
         sleep(5)
       end
 
-      set_config(config, path, force ? {} : current)
+      set_config(config, path, current, force: force)
 
       delete_keys.each do |key|
         puts "#{Colors::REMOVE}- #{key}#{Colors::CLEAR}"
