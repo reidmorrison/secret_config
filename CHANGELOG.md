@@ -38,18 +38,18 @@ Targeted at v2, since it carries breaking changes.
 
 ### Documentation
 
+- **ERB in a file passed to `--import` or `--diff` is now documented**, having been evaluated all along
+  without being written down anywhere. It stays evaluated, and by both commands: a diff exists to show
+  what an import will do, so it has to evaluate whatever the import will. This matches the `file`
+  provider, which passes the file it reads through ERB, and Rails, which does the same for
+  `database.yml`. The consequence, that a transfer file is code and running either command on one runs
+  it, is stated in [Command Line](https://config.reidmorrison.com/cli.html).
 - What a value in the central store is trusted to do now has a section of its own,
   [What the store is trusted to do](https://config.reidmorrison.com/interpolation.html). `${env:NAME}`
   reads the process environment and an absolute `__import__` reads another path, so write access to a
   path is closer to read access to the environment and the store of every process that loads it than it
   looks. Referenced from the SSM IAM policy and from `interpolate:`.
 
-### Deprecated (security)
-
-- **ERB in a file passed to `--import` or `--diff` will stop being evaluated** without an explicit
-  `--erb`. Evaluating it runs whatever code the file contains, and a transfer file is usually one that
-  came from somewhere else. It is still evaluated for now, and warns. ERB in the file read by the
-  `file` **provider** is a documented feature of that provider and is not affected.
 
 ### Breaking
 

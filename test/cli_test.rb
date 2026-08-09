@@ -511,17 +511,16 @@ class CLITest < Minitest::Test
         end
       end
 
-      # ERB in a transfer file is evaluated, which runs whatever the file contains, and that file is
-      # usually one that arrived from somewhere else. v2 will require an explicit `--erb`.
+      # A transfer file is passed through ERB, as `Providers::File` does for the file it reads and as
+      # Rails does for `database.yml`. `--diff` has to evaluate whatever `--import` will, or it stops
+      # describing the import it is meant to preview.
       describe "ERB in a transfer file" do
-        before do
-          SecretConfig.instance_variable_set(:@warnings, Set.new)
-        end
+        let(:erb_source) { "mysql:\n  host: <%= \"localhost\" %>\n" }
 
-        it "is still evaluated" do
+        it "is evaluated on import" do
           with_store do |store, dir|
             source = File.join(dir, "source.yml")
-            File.write(source, "mysql:\n  host: <%= \"localhost\" %>\n")
+            File.write(source, erb_source)
 
             capture_io { build_cli(["--import", path, "--file", source], store).run! }
 
@@ -529,38 +528,39 @@ class CLITest < Minitest::Test
           end
         end
 
-        it "warns on import, naming the file" do
+        it "is evaluated on diff, so the diff shows what the import would write" do
           with_store do |store, dir|
             source = File.join(dir, "source.yml")
-            File.write(source, "mysql:\n  host: <%= \"localhost\" %>\n")
+            File.write(source, erb_source)
 
-            _, err = capture_io { build_cli(["--import", path, "--file", source], store).run! }
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
 
-            assert_includes err, "Deprecation"
-            assert_includes err, "ERB in import file #{source}"
-            assert_includes err, "--erb"
+            assert_includes out, "+ localhost"
+            refute_includes out, "<%="
           end
         end
 
-        it "warns on diff, which evaluates it just as readily" do
+        it "says nothing about it on stderr" do
           with_store do |store, dir|
             source = File.join(dir, "source.yml")
-            File.write(source, "mysql:\n  host: <%= \"localhost\" %>\n")
-
-            _, err = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
-
-            assert_includes err, "ERB in import file #{source}"
-          end
-        end
-
-        it "stays quiet for a file without any" do
-          with_store do |store, dir|
-            source = File.join(dir, "source.yml")
-            File.write(source, {"mysql" => {"host" => "localhost"}}.to_yaml)
+            File.write(source, erb_source)
 
             _, err = capture_io { build_cli(["--import", path, "--file", source], store).run! }
 
             assert_empty err
+          end
+        end
+
+        # Read back as raw text rather than through the provider, which passes the file it reads
+        # through ERB in its own right and would evaluate the literal on the way out.
+        it "leaves a json file alone" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.json")
+            File.write(source, {"mysql" => {"host" => "<%= \"localhost\" %>"}}.to_json)
+
+            capture_io { build_cli(["--import", path, "--file", source], store).run! }
+
+            assert_includes File.read(store), '<%= "localhost" %>'
           end
         end
       end
