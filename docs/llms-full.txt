@@ -1109,6 +1109,17 @@ missing directories. Reads still raise `ConfigurationError` when it is missing, 
 `SecretConfig.use(:file)` against a nonexistent file fails at startup exactly as before. This is what
 lets `secret-config --import` bootstrap a new file from nothing.
 
+### Permissions
+
+The file holds settings in the clear, so a file created by a write is given mode `0600`, readable only
+by the user that owns it. The default umask on most systems would otherwise create it readable by every
+user on the machine.
+
+A file that already exists keeps the mode it has, since it may have been widened deliberately. When a
+write finds one that other users can read, it prints a warning naming the file. To settle it:
+
+    chmod 600 config/application.yml
+
 ### Errors
 
 | Error | Cause |
@@ -1718,6 +1729,32 @@ All interpolation tokens:
 | `${select:a,b,c}` | One of the supplied values, chosen at random |
 | `$${...}` | A literal `${...}`, not interpolated |
 
+That table is the whole list. Any other token raises `SecretConfig::InvalidInterpolation`, including the
+names of methods every Ruby object has.
+
+## Adding a token
+
+A token comes from a subclass of `SecretConfig::StringInterpolator` that declares it and implements a
+method of the same name. The arguments after the `:` arrive as strings, split on `,` and stripped:
+
+~~~ruby
+class MyInterpolator < SecretConfig::SettingInterpolator
+  interpolation :region
+
+  def region(default = "us-east-1")
+    ENV.fetch("AWS_REGION", default)
+  end
+end
+~~~
+
+`${region}` and `${region:eu-west-1}` then resolve through it.
+
+The `interpolation` declaration is what makes the method reachable; a method without one is never
+called. That is deliberate. Dispatch used to accept any method the interpolator responded to, which
+included everything inherited from `Object`, so a value such as `${send:...}` in the central store
+could run arbitrary code in every process that loaded it. Declaring each token keeps the reachable
+surface to exactly what is listed.
+
 Reserved keys:
 
 | Key | Meaning |
@@ -1887,6 +1924,21 @@ produces a snapshot of what the application would actually see:
 
 Do not import an interpolated export. It will replace shared imports with copies, and any `${random}`
 with one frozen value.
+
+An export file is created with mode `0600`, readable only by the user that owns it, since `--no-filter`
+writes real secrets into it. Exporting to stdout instead leaves the redirection to you.
+
+### ERB in an import file
+
+A `.yml` file handed to `--import` or `--diff` is passed through ERB before it is parsed, which runs any
+code the file contains. That is worth knowing about a file that arrived from somewhere else: an export
+from a colleague, an artifact built in CI, something piped in on stdin.
+
+Supplying one now prints a deprecation warning. The next major release will leave ERB alone unless an
+explicit `--erb` is supplied. JSON files are never passed through ERB.
+
+This is separate from ERB in the file the `file` **provider** reads, which is a documented feature of
+that provider and is unaffected. See [Providers](providers).
 
 ## Step 7: Copy a path to spin up a tenant
 

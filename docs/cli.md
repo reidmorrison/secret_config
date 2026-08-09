@@ -157,6 +157,21 @@ produces a snapshot of what the application would actually see:
 Do not import an interpolated export. It will replace shared imports with copies, and any `${random}`
 with one frozen value.
 
+An export file is created with mode `0600`, readable only by the user that owns it, since `--no-filter`
+writes real secrets into it. Exporting to stdout instead leaves the redirection to you.
+
+### ERB in an import file
+
+A `.yml` file handed to `--import` or `--diff` is passed through ERB before it is parsed, which runs any
+code the file contains. That is worth knowing about a file that arrived from somewhere else: an export
+from a colleague, an artifact built in CI, something piped in on stdin.
+
+Supplying one now prints a deprecation warning. The next major release will leave ERB alone unless an
+explicit `--erb` is supplied. JSON files are never passed through ERB.
+
+This is separate from ERB in the file the `file` **provider** reads, which is a documented feature of
+that provider and is unaffected. See [Providers](providers).
+
 ## Step 7: Copy a path to spin up a tenant
 
 `--path` reads from another path in the store instead of a file, which copies a subtree:

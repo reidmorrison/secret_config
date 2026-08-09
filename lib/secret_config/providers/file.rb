@@ -135,15 +135,22 @@ module SecretConfig
         load_yaml(source) || {}
       end
 
+      # The file holds settings in the clear, so one created here is readable only by its owner.
       def write_config(config)
         FileUtils.mkdir_p(::File.dirname(file_name))
-        ::File.write(file_name, config.to_yaml)
+        Utils.write_private_file(file_name, config.to_yaml)
       end
 
+      # Compared as versions rather than strings, so that Psych 10 does not sort below 4.0 and drop
+      # back to the fallback below.
       def load_yaml(src)
-        return YAML.safe_load(src, permitted_classes: [Symbol], aliases: true) if Psych::VERSION > "4.0"
+        return YAML.safe_load(src, permitted_classes: [Symbol], aliases: true) if psych_4_or_later?
 
         YAML.load(src)
+      end
+
+      def psych_4_or_later?
+        Gem::Version.new(Psych::VERSION) >= Gem::Version.new("4.0")
       end
     end
   end

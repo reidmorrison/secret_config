@@ -72,7 +72,7 @@ enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set delibe
 uncovered, which inflates the total. (`cover` replaced the equivalent `track_files`, which SimpleCov now
 deprecates. The reported totals were identical either way.)
 
-The baseline is 98.33% line / 91.31% branch. Every file is at 100% except `cli.rb` (94.5%, the uncovered
+The baseline is 98.39% line / 91.27% branch. Every file is at 100% except `cli.rb` (94.5%, the uncovered
 parts are `--console` and the two AWS branches of `#provider_instance`, none of which runs without AWS
 credentials or `irb`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback),
 `providers/ssm.rb` (97.3%) and `providers/secrets_manager.rb` (97.6%), whose uncovered line in each case
@@ -128,8 +128,14 @@ a value and a branch, its own value is stored under `NODE_KEY` (`"__value__"`) i
 Interpolation runs once, at load/refresh time, inside `Parser#parse`, so `${random}` and `${select:...}`
 produce new values on every process restart or `refresh!`, not on every read. `SettingInterpolator` methods
 (`date`, `time`, `env`, `hostname`, `pid`, `random`, `select`) are dispatched by name from
-`StringInterpolator#parse`; adding a public method to `SettingInterpolator` adds a new `${name:args}` token,
-so do not add public helper methods there casually. `$${...}` escapes interpolation.
+`StringInterpolator#parse`. `$${...}` escapes interpolation.
+
+Dispatch is restricted to the names passed to the class-level `interpolation` declaration, which
+`SettingInterpolator` uses to list those seven. Adding a method there does nothing until it is declared,
+and a declaration is the only way to add a `${name:args}` token. This is a security boundary, not a
+style choice: the gate used to be `respond_to?`, which is true for everything inherited from `Object`,
+so a value of `${send:eval,...}` read out of the central store ran arbitrary code at load. Keep the
+declared list to methods that are meant to be called by whatever the store happens to contain.
 
 A key named `__import__` copies another subtree into its parent node. A relative import value is resolved
 against the already-parsed tree; an absolute one triggers a second provider fetch. Existing keys always win

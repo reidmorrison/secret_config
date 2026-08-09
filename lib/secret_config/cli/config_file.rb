@@ -34,13 +34,15 @@ module SecretConfig
         ::File.new(file_name_or_io).read
       end
 
+      # An export holds the real values whenever `--no-filter` was supplied, so a file created here is
+      # readable only by its owner. Writing to an IO is left alone: where $stdout goes is the caller's.
       def write_data(data)
         return file_name_or_io.write(data) unless file_name_or_io.is_a?(String)
 
         output_path = ::File.dirname(file_name_or_io)
         FileUtils.mkdir_p(output_path)
 
-        ::File.write(file_name_or_io, data)
+        Utils.write_private_file(file_name_or_io, data)
       end
 
       # `format` raises for anything it does not recognize, so both of these only ever see the two
@@ -50,8 +52,29 @@ module SecretConfig
       end
 
       def parse(data)
-        config = format == :json ? JSON.parse(data) : YAML.safe_load(ERB.new(data).result)
+        config = format == :json ? JSON.parse(data) : YAML.safe_load(evaluate_erb(data))
         Utils.sort_by_key!(config)
+      end
+
+      # A transfer file is data, and usually data that came from somewhere else: an export from a
+      # colleague, an artifact built in CI, something piped in on stdin. Evaluating ERB in it runs
+      # whatever code it contains, on `--diff` as much as on `--import`, and nothing documents that it
+      # happens at all. The next major release will require an explicit `--erb`, so warn while
+      # evaluating is still the default.
+      def evaluate_erb(data)
+        if data.match?(/<%/)
+          SecretConfig.deprecation_warning(
+            "ERB in #{source_description} is evaluated, which runs whatever code the file contains. " \
+            "The next major release will not evaluate it without an explicit `--erb`. " \
+            "Remove the ERB, or be ready to supply that option."
+          )
+        end
+
+        ERB.new(data).result
+      end
+
+      def source_description
+        file_name_or_io.is_a?(String) ? "import file #{file_name_or_io}" : "the import read from stdin"
       end
 
       # An IO has no name to infer a format from, so stdin and stdout are always YAML.

@@ -7,7 +7,36 @@ v1.0.1 were reconstructed from the git history and are summaries rather than exh
 
 ## Unreleased
 
-Targeted at v2, since it carries breaking changes.
+Targeted at v2, since it carries breaking changes. The entries under **Security** are the exception:
+none of them is breaking, and they are candidates for a 1.0.1 patch ahead of v2.
+
+### Security
+
+- **A value in the central store can no longer run arbitrary code when the configuration is loaded.**
+  `${...}` dispatch was guarded by `respond_to?`, which is true for every method an object inherits, so
+  a value of `${send:eval,...}` or `${send:system,...}` reached `Object#send` and through it any method
+  at all. Anything able to write a single setting, an SSM parameter, a Secrets Manager secret, a
+  `config/application.yml`, or a file passed to `--import`, could therefore run code in every process
+  that loaded that path, at startup, before the application itself ran. Dispatch now goes through an
+  explicit list of declared interpolations. Every documented token is unchanged. A subclass of
+  `StringInterpolator` or `SettingInterpolator` that added a token by defining a public method must now
+  also declare it with `interpolation :name`; see
+  [Interpolation](https://config.reidmorrison.com/interpolation.html).
+- **Files written by the file provider and by `--export` are created readable only by their owner.**
+  Both wrote through `::File.write`, which applies the umask, creating world-readable files that hold
+  settings, and secrets in the case of `--export --no-filter`, in the clear. New files are created with
+  mode `0600`. A file that already exists keeps its mode, since it may have been widened deliberately,
+  and a warning naming it is printed instead.
+- The `Gemfile` sourced gems over `http://`.
+- The CI workflow now declares `permissions: contents: read` rather than taking the repository default
+  for `GITHUB_TOKEN`.
+
+### Deprecated (security)
+
+- **ERB in a file passed to `--import` or `--diff` will stop being evaluated** without an explicit
+  `--erb`. Evaluating it runs whatever code the file contains, and a transfer file is usually one that
+  came from somewhere else. It is still evaluated for now, and warns. ERB in the file read by the
+  `file` **provider** is a documented feature of that provider and is not affected.
 
 ### Breaking
 
@@ -85,6 +114,12 @@ Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress these warnings
 
 ### Fixed
 
+- The file provider compared `Psych::VERSION` to `"4.0"` as a String, so Psych 10 would sort below 4.0
+  and fall back to the Psych 3 branch, losing `aliases: true` and breaking any config file using YAML
+  anchors. Compared as `Gem::Version` now. No exposure either way: `YAML.load` has been safe by default
+  since Psych 4.
+- A `${...}` token given the wrong number of arguments, such as `${pid:extra}`, raised a bare
+  `ArgumentError`. It raises `InvalidInterpolation` naming the token, like every other bad token.
 - `${random:size}` raised `NoMethodError` instead of generating a value. Every interpolation argument
   is parsed out of the value as a String, and `SecureRandom.urlsafe_base64` requires an Integer. The
   size is now converted, and a near miss such as `${random:abc}` or `${random:0}` raises

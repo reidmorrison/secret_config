@@ -241,6 +241,32 @@ All interpolation tokens:
 | `${select:a,b,c}` | One of the supplied values, chosen at random |
 | `$${...}` | A literal `${...}`, not interpolated |
 
+That table is the whole list. Any other token raises `SecretConfig::InvalidInterpolation`, including the
+names of methods every Ruby object has.
+
+## Adding a token
+
+A token comes from a subclass of `SecretConfig::StringInterpolator` that declares it and implements a
+method of the same name. The arguments after the `:` arrive as strings, split on `,` and stripped:
+
+~~~ruby
+class MyInterpolator < SecretConfig::SettingInterpolator
+  interpolation :region
+
+  def region(default = "us-east-1")
+    ENV.fetch("AWS_REGION", default)
+  end
+end
+~~~
+
+`${region}` and `${region:eu-west-1}` then resolve through it.
+
+The `interpolation` declaration is what makes the method reachable; a method without one is never
+called. That is deliberate. Dispatch used to accept any method the interpolator responded to, which
+included everything inherited from `Object`, so a value such as `${send:...}` in the central store
+could run arbitrary code in every process that loaded it. Declaring each token keeps the reachable
+surface to exactly what is listed.
+
 Reserved keys:
 
 | Key | Meaning |

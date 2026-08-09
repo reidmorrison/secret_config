@@ -130,16 +130,22 @@ module SecretConfig
   end
 
   # Warn once per distinct message about a deprecated feature.
-  # Written to stderr so that it does not corrupt CLI output that is being piped or redirected.
   # Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress.
   def self.deprecation_warning(message)
     return if ENV.key?("SECRET_CONFIG_SILENCE_DEPRECATIONS")
-    return unless @deprecation_warnings.add?(message)
 
-    warn("[secret_config] Deprecation: #{message}")
+    warn_once("Deprecation: #{message}")
   end
 
-  @check_env_var        = true
-  @filters              = [/password/i, /key\Z/i, /passphrase/i, /secret/i, /pwd\Z/i]
-  @deprecation_warnings = Set.new
+  # Warn once per distinct message.
+  # Written to stderr so that it does not corrupt CLI output that is being piped or redirected.
+  def self.warn_once(message)
+    return unless @warnings.add?(message)
+
+    warn("[secret_config] #{message}")
+  end
+
+  @check_env_var = true
+  @filters       = [/password/i, /key\Z/i, /passphrase/i, /secret/i, /pwd\Z/i]
+  @warnings      = Set.new
 end

@@ -118,7 +118,7 @@ class ImporterTest < Minitest::Test
       describe "the deprecated $(random) spelling" do
         before do
           # The warning is emitted once per distinct message per process, so reset it between tests.
-          SecretConfig.instance_variable_set(:@deprecation_warnings, Set.new)
+          SecretConfig.instance_variable_set(:@warnings, Set.new)
         end
 
         it "still generates a value" do

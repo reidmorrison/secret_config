@@ -120,6 +120,17 @@ missing directories. Reads still raise `ConfigurationError` when it is missing, 
 `SecretConfig.use(:file)` against a nonexistent file fails at startup exactly as before. This is what
 lets `secret-config --import` bootstrap a new file from nothing.
 
+### Permissions
+
+The file holds settings in the clear, so a file created by a write is given mode `0600`, readable only
+by the user that owns it. The default umask on most systems would otherwise create it readable by every
+user on the machine.
+
+A file that already exists keeps the mode it has, since it may have been widened deliberately. When a
+write finds one that other users can read, it prints a warning naming the file. To settle it:
+
+    chmod 600 config/application.yml
+
 ### Errors
 
 | Error | Cause |

@@ -148,7 +148,7 @@ class CLITest < Minitest::Test
       end
 
       it "warns that --random_size is deprecated, pointing at the per-key form" do
-        SecretConfig.instance_variable_set(:@deprecation_warnings, Set.new)
+        SecretConfig.instance_variable_set(:@warnings, Set.new)
         _, err = capture_io { SecretConfig::CLI.new(["--random_size", "64"]) }
 
         assert_includes err, "Deprecation"
@@ -157,7 +157,7 @@ class CLITest < Minitest::Test
       end
 
       it "does not warn when --random_size is not supplied" do
-        SecretConfig.instance_variable_set(:@deprecation_warnings, Set.new)
+        SecretConfig.instance_variable_set(:@warnings, Set.new)
         _, err = capture_io { SecretConfig::CLI.new(["--version"]) }
 
         assert_empty err
@@ -274,10 +274,13 @@ class CLITest < Minitest::Test
         SecretConfig::CLI.new(argv + ["--provider", "file", "--provider-file", store])
       end
 
+      # The copy is made private, which is what a write through the provider creates, so that the
+      # commands below do not each trip the warning covered in test/providers/file_test.rb.
       def with_store(&)
         Dir.mktmpdir do |dir|
           store = File.join(dir, "application.yml")
           FileUtils.cp("test/config/application.yml", store)
+          File.chmod(0o600, store)
           yield store, dir
         end
       end
@@ -336,6 +339,17 @@ class CLITest < Minitest::Test
           capture_io { build_cli(["--export", path, "--file", target, "--no-filter"], store).run! }
 
           assert_equal "secret_configrules", YAML.safe_load_file(target).dig("mysql", "password")
+        end
+      end
+
+      # `--no-filter` writes the real values, so the export must not be left readable by every user
+      # on the machine.
+      it "exports to a file readable only by its owner" do
+        with_store do |store, dir|
+          target = File.join(dir, "exported.yml")
+          capture_io { build_cli(["--export", path, "--file", target, "--no-filter"], store).run! }
+
+          assert_equal 0o600, File.stat(target).mode & 0o777
         end
       end
 
@@ -414,6 +428,60 @@ class CLITest < Minitest::Test
 
           assert_includes out, "mysql/replica"
           assert_includes out, "+ 127.0.0.2"
+        end
+      end
+
+      # ERB in a transfer file is evaluated, which runs whatever the file contains, and that file is
+      # usually one that arrived from somewhere else. v2 will require an explicit `--erb`.
+      describe "ERB in a transfer file" do
+        before do
+          SecretConfig.instance_variable_set(:@warnings, Set.new)
+        end
+
+        it "is still evaluated" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, "mysql:\n  host: <%= \"localhost\" %>\n")
+
+            capture_io { build_cli(["--import", path, "--file", source], store).run! }
+
+            assert_equal "localhost", SecretConfig::Providers::File.new(file_name: store).fetch("#{path}/mysql/host")
+          end
+        end
+
+        it "warns on import, naming the file" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, "mysql:\n  host: <%= \"localhost\" %>\n")
+
+            _, err = capture_io { build_cli(["--import", path, "--file", source], store).run! }
+
+            assert_includes err, "Deprecation"
+            assert_includes err, "ERB in import file #{source}"
+            assert_includes err, "--erb"
+          end
+        end
+
+        it "warns on diff, which evaluates it just as readily" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, "mysql:\n  host: <%= \"localhost\" %>\n")
+
+            _, err = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            assert_includes err, "ERB in import file #{source}"
+          end
+        end
+
+        it "stays quiet for a file without any" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"host" => "localhost"}}.to_yaml)
+
+            _, err = capture_io { build_cli(["--import", path, "--file", source], store).run! }
+
+            assert_empty err
+          end
         end
       end
 

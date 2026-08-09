@@ -24,6 +24,11 @@ module SecretConfig
   class SettingInterpolator < StringInterpolator
     DEFAULT_RANDOM_SIZE = 32
 
+    # The complete set of `${...}` tokens. Only what is named here can be called by a value read from
+    # the central store, so this list is the entire surface a store with a bad value can reach.
+    # Adding a method below does nothing until it is added here too.
+    interpolation :date, :time, :env, :hostname, :pid, :random, :select
+
     def date(format = "%Y%m%d")
       Date.today.strftime(format)
     end
