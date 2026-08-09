@@ -4,6 +4,11 @@ on:
   - push
   - pull_request
 
+# Neither job writes anything back to the repository, so drop the default token down to a read of the
+# checkout. Any job that needs more can raise it for itself.
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Rubocop

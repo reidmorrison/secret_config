@@ -148,7 +148,7 @@ class CLITest < Minitest::Test
       end
 
       it "warns that --random_size is deprecated, pointing at the per-key form" do
-        SecretConfig.instance_variable_set(:@deprecation_warnings, Set.new)
+        SecretConfig.instance_variable_set(:@warnings, Set.new)
         _, err = capture_io { SecretConfig::CLI.new(["--random_size", "64"]) }
 
         assert_includes err, "Deprecation"
@@ -157,7 +157,7 @@ class CLITest < Minitest::Test
       end
 
       it "does not warn when --random_size is not supplied" do
-        SecretConfig.instance_variable_set(:@deprecation_warnings, Set.new)
+        SecretConfig.instance_variable_set(:@warnings, Set.new)
         _, err = capture_io { SecretConfig::CLI.new(["--version"]) }
 
         assert_empty err
@@ -274,10 +274,13 @@ class CLITest < Minitest::Test
         SecretConfig::CLI.new(argv + ["--provider", "file", "--provider-file", store])
       end
 
+      # The copy is made private, which is what a write through the provider creates, so that the
+      # commands below do not each trip the warning covered in test/providers/file_test.rb.
       def with_store(&)
         Dir.mktmpdir do |dir|
           store = File.join(dir, "application.yml")
           FileUtils.cp("test/config/application.yml", store)
+          File.chmod(0o600, store)
           yield store, dir
         end
       end
@@ -336,6 +339,17 @@ class CLITest < Minitest::Test
           capture_io { build_cli(["--export", path, "--file", target, "--no-filter"], store).run! }
 
           assert_equal "secret_configrules", YAML.safe_load_file(target).dig("mysql", "password")
+        end
+      end
+
+      # `--no-filter` writes the real values, so the export must not be left readable by every user
+      # on the machine.
+      it "exports to a file readable only by its owner" do
+        with_store do |store, dir|
+          target = File.join(dir, "exported.yml")
+          capture_io { build_cli(["--export", path, "--file", target, "--no-filter"], store).run! }
+
+          assert_equal 0o600, File.stat(target).mode & 0o777
         end
       end
 
@@ -405,6 +419,86 @@ class CLITest < Minitest::Test
         end
       end
 
+      # A diff is what you run to inspect a change before importing it, often in a terminal that is
+      # being recorded or a CI log, so it masks secrets the way --export does.
+      describe "filtering" do
+        it "masks a changed secret while still reporting that it changed" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"password" => "a-brand-new-password"}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            assert_includes out, "mysql/password"
+            assert_includes out, "- #{SecretConfig::FILTERED}"
+            assert_includes out, "+ #{SecretConfig::FILTERED}"
+            refute_includes out, "a-brand-new-password"
+            refute_includes out, "secret_configrules"
+          end
+        end
+
+        it "shows the real values with --no-filter" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"password" => "a-brand-new-password"}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source, "--no-filter"], store).run! }
+
+            assert_includes out, "- secret_configrules"
+            assert_includes out, "+ a-brand-new-password"
+          end
+        end
+
+        it "leaves a value that is not a secret in the clear" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"host" => "localhost"}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            assert_includes out, "- 127.0.0.1"
+            assert_includes out, "+ localhost"
+          end
+        end
+
+        it "masks a secret that only one side has" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"replica_password" => "brand-new"}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            assert_includes out, "mysql/replica_password"
+            assert_includes out, "+ #{SecretConfig::FILTERED}"
+            refute_includes out, "brand-new"
+          end
+        end
+
+        it "masks secrets when diffing two paths in the store" do
+          with_store do |store|
+            capture_io { build_cli(["--import", "/copy/my_application", "--path", path], store).run! }
+            capture_io { build_cli(["--set", "/copy/my_application/mysql/password=changed"], store).run! }
+
+            out, = capture_io { build_cli(["--diff", path, "--path", "/copy/my_application"], store).run! }
+
+            assert_includes out, "mysql/password"
+            refute_includes out, "changed"
+            refute_includes out, "secret_configrules"
+          end
+        end
+
+        it "still treats a [FILTERED] source value as no change at all" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"password" => SecretConfig::FILTERED}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            refute_includes out, "mysql/password"
+          end
+        end
+      end
+
       it "reports a key that only the source has as an addition" do
         with_store do |store, dir|
           source = File.join(dir, "source.yml")
@@ -414,6 +508,60 @@ class CLITest < Minitest::Test
 
           assert_includes out, "mysql/replica"
           assert_includes out, "+ 127.0.0.2"
+        end
+      end
+
+      # A transfer file is passed through ERB, as `Providers::File` does for the file it reads and as
+      # Rails does for `database.yml`. `--diff` has to evaluate whatever `--import` will, or it stops
+      # describing the import it is meant to preview.
+      describe "ERB in a transfer file" do
+        let(:erb_source) { "mysql:\n  host: <%= \"localhost\" %>\n" }
+
+        it "is evaluated on import" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, erb_source)
+
+            capture_io { build_cli(["--import", path, "--file", source], store).run! }
+
+            assert_equal "localhost", SecretConfig::Providers::File.new(file_name: store).fetch("#{path}/mysql/host")
+          end
+        end
+
+        it "is evaluated on diff, so the diff shows what the import would write" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, erb_source)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            assert_includes out, "+ localhost"
+            refute_includes out, "<%="
+          end
+        end
+
+        it "says nothing about it on stderr" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, erb_source)
+
+            _, err = capture_io { build_cli(["--import", path, "--file", source], store).run! }
+
+            assert_empty err
+          end
+        end
+
+        # Read back as raw text rather than through the provider, which passes the file it reads
+        # through ERB in its own right and would evaluate the literal on the way out.
+        it "leaves a json file alone" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.json")
+            File.write(source, {"mysql" => {"host" => "<%= \"localhost\" %>"}}.to_json)
+
+            capture_io { build_cli(["--import", path, "--file", source], store).run! }
+
+            assert_includes File.read(store), '<%= "localhost" %>'
+          end
         end
       end
 

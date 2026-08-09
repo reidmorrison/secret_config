@@ -72,7 +72,7 @@ enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set delibe
 uncovered, which inflates the total. (`cover` replaced the equivalent `track_files`, which SimpleCov now
 deprecates. The reported totals were identical either way.)
 
-The baseline is 98.33% line / 91.31% branch. Every file is at 100% except `cli.rb` (94.5%, the uncovered
+The baseline is 98.39% line / 91.61% branch. Every file is at 100% except `cli.rb` (94.5%, the uncovered
 parts are `--console` and the two AWS branches of `#provider_instance`, none of which runs without AWS
 credentials or `irb`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback),
 `providers/ssm.rb` (97.3%) and `providers/secrets_manager.rb` (97.6%), whose uncovered line in each case
@@ -128,8 +128,14 @@ a value and a branch, its own value is stored under `NODE_KEY` (`"__value__"`) i
 Interpolation runs once, at load/refresh time, inside `Parser#parse`, so `${random}` and `${select:...}`
 produce new values on every process restart or `refresh!`, not on every read. `SettingInterpolator` methods
 (`date`, `time`, `env`, `hostname`, `pid`, `random`, `select`) are dispatched by name from
-`StringInterpolator#parse`; adding a public method to `SettingInterpolator` adds a new `${name:args}` token,
-so do not add public helper methods there casually. `$${...}` escapes interpolation.
+`StringInterpolator#parse`. `$${...}` escapes interpolation.
+
+Dispatch is restricted to the names passed to the class-level `interpolation` declaration, which
+`SettingInterpolator` uses to list those seven. Adding a method there does nothing until it is declared,
+and a declaration is the only way to add a `${name:args}` token. This is a security boundary, not a
+style choice: the gate used to be `respond_to?`, which is true for everything inherited from `Object`,
+so a value of `${send:eval,...}` read out of the central store ran arbitrary code at load. Keep the
+declared list to methods that are meant to be called by whatever the store happens to contain.
 
 A key named `__import__` copies another subtree into its parent node. A relative import value is resolved
 against the already-parsed tree; an absolute one triggers a second provider fetch. Existing keys always win
@@ -157,8 +163,13 @@ variable is resolved on every read instead, and is never written into the cache,
 `fetch` agree about it and `configuration` never reports it.
 
 `SecretConfig.filters` (default: regexes matching password/key/passphrase/secret/pwd) mask values as
-`[FILTERED]` in `configuration` output and CLI exports. Filtering applies only to those dumps, never to
-`[]`/`fetch`.
+`[FILTERED]` in `configuration` output and in the CLI's `--export` and `--diff`. Filtering applies only
+to those dumps, never to `[]`/`fetch`. `Utils.filtered?` holds the matching rule, on the last segment of
+the key only, and is shared by `Registry#filter_value` and `CLI::Differ` so the two cannot drift apart.
+
+`--diff` masks when it prints, never before it compares, so a changed secret is still reported as
+changed with both sides shown as `[FILTERED]`. Filtering the values before comparing would make it
+report nothing at all.
 
 ### Environment variables that change startup behavior
 
@@ -172,9 +183,15 @@ falls back to `RAILS_ENV` then `Rails.env`.
 
 The CLI talks to a provider directly rather than through the global registry, so it can operate on any path
 without `SECRET_CONFIG_PATH` being set. `CLI#provider_instance` builds `:ssm` and `:file`, and raises
-`ArgumentError` for anything else. Exports filter secrets by default (`--no-filter` to disable) and leave
-`${...}` uninterpolated unless `--interpolate` is passed, which keeps round-tripping an export back through
-`--import` non-destructive.
+`ArgumentError` for anything else. Exports and diffs filter secrets by default (`--no-filter` to disable)
+and leave `${...}` uninterpolated unless `--interpolate` is passed, which keeps round-tripping an export
+back through `--import` non-destructive.
+
+`ConfigFile` passes a YAML transfer file through ERB, on `--diff` as well as `--import`. That is
+deliberate and documented: a diff has to evaluate whatever the import it previews will evaluate, and it
+matches what `Providers::File` does for the file it reads. It also means a transfer file is code. A plan
+to gate it behind `--erb` was dropped for those reasons; do not reintroduce it without addressing the
+diff/import consistency problem.
 
     CLI                 dispatch, and the reporting that goes with each command
       ├── Options       the OptionParser and the options it sets; CLI delegates a reader for each

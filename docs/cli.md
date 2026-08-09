@@ -136,6 +136,18 @@ alone. `--prune` removes them, making the store match the file exactly:
 
 Run the diff first, and read the `-` lines. That is the list `--prune` will delete.
 
+Secrets are masked as `[FILTERED]` on both sides, the same way `--export` masks them, so a diff is safe
+to run in a recorded terminal or a CI log. A masked key that changed is still reported as changed; only
+its value is withheld:
+
+    mysql/password:
+    - [FILTERED]
+    + [FILTERED]
+
+Add `--no-filter` when you need to see which value it actually is:
+
+    secret-config --diff /production/my_application --file production.yml --no-filter
+
 ## Step 6: Export for review or backup
 
     secret-config --export /production/my_application --file production.yml
@@ -156,6 +168,31 @@ produces a snapshot of what the application would actually see:
 
 Do not import an interpolated export. It will replace shared imports with copies, and any `${random}`
 with one frozen value.
+
+An export file is created with mode `0600`, readable only by the user that owns it, since `--no-filter`
+writes real secrets into it. Exporting to stdout instead leaves the redirection to you.
+
+### ERB in an import file
+
+A `.yml` file handed to `--import` or `--diff` is passed through ERB before it is parsed, the same way
+the `file` provider treats the file it reads and the same way Rails treats `database.yml`:
+
+~~~yaml
+mysql:
+  host:     <%= ENV.fetch("DB_HOST", "mysql_server.example.net") %>
+  password: <%= ENV.fetch("DB_PASSWORD") %>
+~~~
+
+`--diff` evaluates it too, deliberately. A diff exists to show what an import will do, so it has to
+evaluate whatever the import will; a diff that showed `<%= ... %>` as a literal would be describing an
+import that never happens.
+
+JSON files are never passed through ERB.
+
+The consequence worth stating plainly: **a transfer file is code**, and running `--import` or `--diff`
+on one runs it. That is fine for the normal case, a file you wrote in your own repository or deploy
+tooling. Give a file that arrived from somewhere else the same reading you would give a script before
+running it.
 
 ## Step 7: Copy a path to spin up a tenant
 
@@ -292,7 +329,7 @@ secret-config [options]
         --provider-file FILE_NAME    For --provider file only. The config file to read and write. Default: $SECRET_CONFIG_FILE_NAME, then config/application.yml.
         --key_id KEY_ID              For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key.
         --key_alias KEY_ALIAS        For --import only. Encrypt config settings with this AWS KMS alias.
-        --no-filter                  For --export only. Do not filter passwords and keys.
+        --no-filter                  For --export and --diff. Do not filter passwords and keys.
         --interpolate                For --export only. Evaluate string interpolation and __import__.
         --prune                      For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import.
         --force                      For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key.

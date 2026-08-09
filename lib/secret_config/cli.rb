@@ -128,6 +128,9 @@ module SecretConfig
       path ? diff_against_path(diff, path) : diff_against_file(diff, file_name || $stdin)
     end
 
+    # Both sides are fetched unfiltered and handed to `Differ` with the filters to apply, so that the
+    # comparison sees the real values and only the printing is masked. Filtering here rather than in
+    # `fetch_config` is what keeps a changed password visible as a change.
     def diff_against_file(target_path, source_file)
       source = Utils.flatten(ConfigFile.new(source_file).read, target_path)
       target = Utils.flatten(fetch_config(target_path, filtered: false), target_path)
@@ -137,7 +140,7 @@ module SecretConfig
         puts "+++ #{source_file}#{Colors::CLEAR}"
       end
 
-      Differ.display(target, source)
+      Differ.display(target, source, filters: diff_filters)
     end
 
     def diff_against_path(target_path, source_path)
@@ -147,7 +150,12 @@ module SecretConfig
       puts "#{Colors::TITLE}--- #{provider}:#{target_path}"
       puts "+++ #{provider}:#{source_path}#{Colors::CLEAR}"
 
-      Differ.display(target, source)
+      Differ.display(target, source, filters: diff_filters)
+    end
+
+    # Returns the filters `--diff` masks its output with, or nil under `--no-filter`.
+    def diff_filters
+      no_filter ? nil : SecretConfig.filters
     end
 
     # IRB is required here rather than at the top of the file because it stops being a default gem in

@@ -120,6 +120,17 @@ missing directories. Reads still raise `ConfigurationError` when it is missing, 
 `SecretConfig.use(:file)` against a nonexistent file fails at startup exactly as before. This is what
 lets `secret-config --import` bootstrap a new file from nothing.
 
+### Permissions
+
+The file holds settings in the clear, so a file created by a write is given mode `0600`, readable only
+by the user that owns it. The default umask on most systems would otherwise create it readable by every
+user on the machine.
+
+A file that already exists keeps the mode it has, since it may have been widened deliberately. When a
+write finds one that other users can read, it prints a warning naming the file. To settle it:
+
+    chmod 600 config/application.yml
+
 ### Errors
 
 | Error | Cause |
@@ -223,7 +234,11 @@ This grants only Parameter Store capabilities, not the rest of AWS Systems Manag
 never writes needs only the two `Get` actions.
 
 Narrow `Resource` to the paths the application actually uses when you can. `"*"` is shown here because
-the right ARN depends on your account and region.
+the right ARN depends on your account and region. That narrowing is worth the effort: `PutParameter` on
+a path is a stronger permission than it looks, because a setting written there can read the process
+environment of everything that loads it through `${env:...}`, and can read other paths through an
+absolute `__import__`. See
+[Interpolation](interpolation#what-the-store-is-trusted-to-do).
 
 These are not used by Secret Config, but are worth granting to anyone managing parameters through the
 AWS Console:

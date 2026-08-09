@@ -1,5 +1,50 @@
 module SecretConfig
   module Utils
+    # Mode for a file this gem creates that can hold configuration values in the clear.
+    PRIVATE_FILE_MODE = 0o600
+
+    # Writes `data` to `file_name`, creating it readable only by its owner.
+    #
+    # Every caller writes settings in the clear, and `::File.write` would create the file with
+    # whatever the umask allows, which is world readable by default on most systems.
+    #
+    # A file that already exists keeps the mode it has: it may have been widened deliberately, and
+    # a write is no place to change that silently. Warn instead, once per file per process, since
+    # the file provider rewrites the whole file on every `set`.
+    def self.write_private_file(file_name, data)
+      warn_when_readable(file_name) if ::File.exist?(file_name)
+
+      ::File.open(file_name, ::File::WRONLY | ::File::CREAT | ::File::TRUNC, PRIVATE_FILE_MODE) do |io|
+        io.write(data)
+      end
+      data
+    end
+
+    # File modes are not meaningful on every platform, so report rather than enforce.
+    def self.warn_when_readable(file_name)
+      mode = ::File.stat(file_name).mode & 0o777
+      return if mode.nobits?(0o077)
+
+      SecretConfig.warn_once(
+        "#{file_name} is readable by users other than its owner (mode #{format('%04o', mode)}) and can " \
+        "hold settings in the clear. Run: chmod 600 #{file_name}"
+      )
+    end
+    private_class_method :warn_when_readable
+
+    # Returns [true|false] whether the value of the supplied key should be masked as `FILTERED`.
+    #
+    # Only the last segment of the key is matched, so `mysql/password` is filtered by `/password/i`
+    # while `password_policy/max_age` is not. `filters` holds Regexps, matched against the name, and
+    # Strings, which must equal it. Shared by `Registry#configuration` and the CLI's `--diff`, which
+    # have to agree about what counts as a secret.
+    def self.filtered?(key, filters)
+      return false unless filters
+
+      _, name = ::File.split(key)
+      filters.any? { |filter| filter.is_a?(Regexp) ? name.match?(filter) : name == filter }
+    end
+
     # Takes a hierarchical structure and flattens it to a single level.
     # If path is supplied it is prepended to every key returned.
     def self.flatten_each(hash, path = nil, &block)

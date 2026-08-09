@@ -34,13 +34,15 @@ module SecretConfig
         ::File.new(file_name_or_io).read
       end
 
+      # An export holds the real values whenever `--no-filter` was supplied, so a file created here is
+      # readable only by its owner. Writing to an IO is left alone: where $stdout goes is the caller's.
       def write_data(data)
         return file_name_or_io.write(data) unless file_name_or_io.is_a?(String)
 
         output_path = ::File.dirname(file_name_or_io)
         FileUtils.mkdir_p(output_path)
 
-        ::File.write(file_name_or_io, data)
+        Utils.write_private_file(file_name_or_io, data)
       end
 
       # `format` raises for anything it does not recognize, so both of these only ever see the two
@@ -49,6 +51,13 @@ module SecretConfig
         format == :json ? config.to_json : config.to_yaml
       end
 
+      # A YAML transfer file is passed through ERB, the same way `Providers::File` treats the file it
+      # reads, and the same way Rails treats `database.yml`. `--diff` evaluates it too, deliberately:
+      # a diff exists to show what an import will do, so it has to evaluate whatever the import will.
+      #
+      # This does mean a transfer file is code, and running either command on one is choosing to run
+      # it. That is a documented property rather than something to gate behind a flag; the file is
+      # normally one you wrote, in your own repository or deploy tooling.
       def parse(data)
         config = format == :json ? JSON.parse(data) : YAML.safe_load(ERB.new(data).result)
         Utils.sort_by_key!(config)

@@ -77,10 +77,13 @@ module Providers
           YAML
         end
 
-        def with_file(contents)
+        # Created private, which is what a write through the provider creates, so that these do not
+        # each trip the warning that has its own tests below.
+        def with_file(contents, mode: 0o600)
           Dir.mktmpdir do |dir|
             path = File.join(dir, "application.yml")
             File.write(path, contents)
+            File.chmod(mode, path)
             yield SecretConfig::Providers::File.new(file_name: path), path
           end
         end
@@ -166,6 +169,61 @@ module Providers
               assert_nil file_provider.delete("/test/missing/branch")
 
               assert_equal source, File.read(path)
+            end
+          end
+        end
+
+        # The file holds settings in the clear, and the default umask would otherwise create it
+        # readable by every user on the machine.
+        describe "permissions" do
+          before do
+            # Warned once per file per process, so clear what earlier tests recorded.
+            SecretConfig.instance_variable_set(:@warnings, Set.new)
+          end
+
+          it "creates a new file readable only by its owner" do
+            Dir.mktmpdir do |dir|
+              path = File.join(dir, "new", "application.yml")
+              SecretConfig::Providers::File.new(file_name: path).set("/test/my_application/mysql/password", "secret")
+
+              assert_equal 0o600, File.stat(path).mode & 0o777
+            end
+          end
+
+          it "keeps the mode of a file that already exists" do
+            with_file(source, mode: 0o644) do |file_provider, path|
+              capture_io { file_provider.set("/test/my_application/mysql/password", "secret") }
+
+              assert_equal 0o644, File.stat(path).mode & 0o777
+            end
+          end
+
+          it "warns when the file it wrote is readable by anyone else" do
+            with_file(source, mode: 0o644) do |file_provider, path|
+              _, err = capture_io { file_provider.set("/test/my_application/mysql/password", "secret") }
+
+              assert_includes err, "readable by users other than its owner"
+              assert_includes err, "0644"
+              assert_includes err, "chmod 600 #{path}"
+            end
+          end
+
+          it "warns only once for the same file" do
+            with_file(source, mode: 0o644) do |file_provider|
+              _, err = capture_io do
+                file_provider.set("/test/my_application/mysql/password", "secret")
+                file_provider.set("/test/my_application/mysql/username", "someone")
+              end
+
+              assert_equal 1, err.scan("readable by users other than its owner").size
+            end
+          end
+
+          it "stays quiet for a file that is already private" do
+            with_file(source) do |file_provider|
+              _, err = capture_io { file_provider.set("/test/my_application/mysql/password", "secret") }
+
+              assert_empty err
             end
           end
         end
