@@ -44,6 +44,17 @@ Set `SECRET_CONFIG_SILENCE_DEPRECATIONS` to any value to suppress these warnings
 
 ### Added
 
+- An AWS Secrets Manager provider, selected with `:secrets_manager`, **in beta while feedback is
+  gathered on [issue 8](https://github.com/reidmorrison/secret_config/issues/8)**, holding one setting per secret so
+  that a tree can move between it and the Parameter Store unchanged. It needs the
+  `aws-sdk-secretsmanager` gem, which stays an optional dependency, and takes the same `key_id:` and
+  `key_alias:` arguments as the SSM provider. Two differences are worth knowing before choosing it:
+  Secrets Manager charges per secret per month, and a delete is scheduled rather than immediate, so the
+  key cannot be rewritten until the recovery window elapses. `recovery_window_in_days:` sets that
+  window, between 7 and 30, defaulting to 30. See
+  [Providers](https://config.reidmorrison.com/providers.html).
+- `secret-config --provider secrets_manager` runs every command against Secrets Manager, other than
+  `--delete-tree`, which that store cannot make immediate.
 - `SecretConfig.use` accepts `interpolate:`, which was previously reachable only by constructing a
   `Registry` directly. It defaults to `true`, so existing calls are unaffected.
 - `__generate__:size` sets the number of bytes to generate for a single key, overriding `--random_size`

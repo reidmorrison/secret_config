@@ -24,13 +24,14 @@ SecretConfig.use(:file, path: "/development")
 
 Two arguments matter:
 
-* **The provider**, `:file` or `:ssm`, decides where settings are read from. See
+* **The provider**, `:file`, `:ssm` or `:secrets_manager`, decides where settings are read from. See
   [Providers](providers).
 * **`path:`** is the root that every key is read relative to. It is absolute; a value given without a
   leading `/` has one added.
 
 Anything else passed to `use` goes to the provider. `file_name:` for the file provider, `key_id:`,
-`retry_count:` and the AWS client options for SSM.
+`retry_count:` and the AWS client options for SSM, `key_id:` and `recovery_window_in_days:` for
+Secrets Manager.
 
 A typical non-Rails application picks the provider from its own environment:
 
@@ -124,10 +125,10 @@ deployed container normally needs.
 | Name | Effect | Precedence |
 | --- | --- | --- |
 | `SECRET_CONFIG_PATH` | Root path the configuration is read from | Wins over the configured `path:` |
-| `SECRET_CONFIG_PROVIDER` | Provider to use, `file` or `ssm` | Wins over the configured provider |
+| `SECRET_CONFIG_PROVIDER` | Provider to use, `file`, `ssm` or `secrets_manager` | Wins over the configured provider |
 | `SECRET_CONFIG_FILE_NAME` | File the `file` provider reads and writes | Used when no `file_name:` is given |
-| `SECRET_CONFIG_KEY_ID` | KMS key id used when writing to SSM | Used when no `key_id:` is given |
-| `SECRET_CONFIG_KEY_ALIAS` | KMS key alias used when writing to SSM | Used when no `key_alias:` is given |
+| `SECRET_CONFIG_KEY_ID` | KMS key id used when writing to SSM or Secrets Manager | Used when no `key_id:` is given |
+| `SECRET_CONFIG_KEY_ALIAS` | KMS key alias used when writing to SSM or Secrets Manager | Used when no `key_alias:` is given |
 | `SECRET_CONFIG_SILENCE_DEPRECATIONS` | Suppresses deprecation warnings on stderr, when set to any value | n/a |
 
 `SECRET_CONFIG_PATH` and `SECRET_CONFIG_PROVIDER` override what the code asked for, which is what makes

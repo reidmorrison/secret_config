@@ -15,8 +15,9 @@ Gem::Specification.new do |s|
                             "Configuration and secrets come from one central store."
   s.description           = "Secret Config stores configuration settings and secrets centrally, " \
                             "supporting multiple tenants of the same application. Settings are read " \
-                            "from AWS System Manager Parameter Store, or a local file during " \
-                            "development and test, and can be overridden with environment variables."
+                            "from AWS System Manager Parameter Store, AWS Secrets Manager, or a local " \
+                            "file during development and test, and can be overridden with " \
+                            "environment variables."
   s.files                 = Dir["lib/**/*", "bin/*", "LICENSE", "Rakefile", "README.md", "CHANGELOG.md"]
   s.license               = "Apache-2.0"
   s.required_ruby_version = ">= 3.2"

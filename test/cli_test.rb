@@ -113,6 +113,7 @@ class CLITest < Minitest::Test
 
       it "parses --provider" do
         assert_equal :file, SecretConfig::CLI.new(["--provider", "file"]).provider
+        assert_equal :secrets_manager, SecretConfig::CLI.new(["--provider", "secrets_manager"]).provider
       end
 
       it "parses --no-filter" do
@@ -221,7 +222,27 @@ class CLITest < Minitest::Test
         error = assert_raises ArgumentError do
           cli.send(:provider_instance)
         end
-        assert_equal "Invalid provider: vault. Valid providers: ssm | file", error.message
+        assert_equal "Invalid provider: vault. Valid providers: ssm | secrets_manager | file", error.message
+      end
+    end
+
+    # The KMS key the AWS providers are built with. Neither of those providers can be constructed here,
+    # since both need credentials, so what they would be handed is asserted on directly.
+    describe "#kms_args" do
+      it "is empty when neither option was supplied" do
+        assert_empty SecretConfig::CLI.new(["--version"]).send(:kms_args)
+      end
+
+      it "passes the key id through" do
+        cli = SecretConfig::CLI.new(["--key_id", "key-123"])
+
+        assert_equal({key_id: "key-123"}, cli.send(:kms_args))
+      end
+
+      it "prefers the key alias over the key id" do
+        cli = SecretConfig::CLI.new(["--key_id", "key-123", "--key_alias", "my_key"])
+
+        assert_equal({key_alias: "my_key"}, cli.send(:kms_args))
       end
     end
 

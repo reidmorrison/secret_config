@@ -10,20 +10,26 @@ layout: default
 * TOC
 {:toc}
 
-A provider is where settings are actually stored. Two ship with the gem, and application code reads the
-same way against either:
+A provider is where settings are actually stored. Three ship with the gem, and application code reads
+the same way against any of them:
 
 | Provider | Store | Typical use |
 | --- | --- | --- |
 | `:file` | A local YAML file | Development, test, and the CLI without AWS |
 | `:ssm` | AWS SSM Parameter Store | Production, and anywhere secrets must be encrypted at rest |
+| `:secrets_manager` | AWS Secrets Manager | Production, where rotation or per-secret audit logging is required. **Beta** |
 
 Select one when the registry is built:
 
 ~~~ruby
 SecretConfig.use(:file, path: "/development")
 SecretConfig.use(:ssm, path: "/production/my_application")
+SecretConfig.use(:secrets_manager, path: "/production/my_application")
 ~~~
+
+`:ssm` and `:secrets_manager` are interchangeable: both hold one setting per key under a path, so the
+same tree can be moved between them with the [command line](cli). They differ in cost, which is covered
+below, and in how a delete behaves.
 
 Arguments other than `path:` and `interpolate:` are passed through to the provider, and are documented
 per provider below. See [Configuration](config) for the rest of `use`.
@@ -239,6 +245,193 @@ Parameter Store is inexpensive, often free, within these limits:
 
 A custom KMS key costs about $1 per month. By comparison, AWS Secrets Manager charges per secret per
 month, which at the granularity of an application's entire configuration adds up quickly.
+
+## Secrets Manager provider
+
+**This provider is beta, and feedback is wanted.** It is complete and tested, but it has not yet had
+the production mileage the other two have, and one design decision in particular is worth hearing about
+before it settles: whether one secret per setting is the right layout, given that Secrets Manager users
+often keep many related values in a single JSON document. If you are using it, please say so on
+[issue 8](https://github.com/reidmorrison/secret_config/issues/8), along with anything that did not
+behave the way the Parameter Store provider would have.
+
+Reads and writes AWS Secrets Manager. One secret holds one setting, laid out under a path exactly as
+the Parameter Store tree is, so the two providers are interchangeable.
+
+~~~ruby
+SecretConfig.use(:secrets_manager, path: "/production/my_application")
+~~~
+
+Choose this over the Parameter Store when you need built-in rotation or per-secret access audit
+logging. It costs meaningfully more, so read [Limits and cost](#limits-and-cost-1) before pointing an
+entire configuration tree at it.
+
+### Installing
+
+The AWS SDK is not a dependency of this gem. Add it yourself:
+
+~~~ruby
+gem "aws-sdk-secretsmanager"
+~~~
+
+Without it, constructing the provider raises
+`LoadError: Install gem 'aws-sdk-secretsmanager' to use AWS Secrets Manager`.
+
+### Options
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `key_id:` | `SECRET_CONFIG_KEY_ID`, then the account default `aws/secretsmanager` | KMS key id used when writing |
+| `key_alias:` | `SECRET_CONFIG_KEY_ALIAS` | KMS key alias used when writing. Takes precedence over `key_id:`, and is prefixed with `alias/` if not already |
+| `recovery_window_in_days:` | `30` | How long a deleted secret can still be restored. Must be between 7 and 30 |
+
+Any other option is passed straight to
+[`Aws::SecretsManager::Client`](https://docs.aws.amazon.com/sdk-for-ruby/v3/api/Aws/SecretsManager/Client.html#initialize-instance_method),
+which is how region, credentials and endpoints are set.
+
+If [Semantic Logger](https://logger.reidmorrison.com/) is loaded, the AWS client logs through it.
+
+### How settings are loaded
+
+The whole tree is read once, when the registry is built, and again on every `SecretConfig.refresh!`.
+Between those, every lookup is an in-memory hash read that makes no API call. This is the same
+behaviour as the other two providers, and it is worth being explicit about here because Secrets
+Manager bills per API call and logs every read.
+
+The Parameter Store has `get_parameters_by_path`, which walks a hierarchy directly. Secrets Manager has
+no hierarchical listing, so the load works differently:
+
+1. `batch_get_secret_value` is called with a `name` filter set to the registry's root path. That
+   returns names and values together, so there is no separate listing pass.
+2. AWS matches that filter as a **plain string prefix**, case-sensitive, which knows nothing about `/`
+   as a separator. A root path of `/production/my_app` therefore also matches secrets named
+   `/production/my_application/mysql/host`. The provider discards anything that is not under the root
+   path as a directory, so the registry sees exactly the keys it would have seen from the Parameter
+   Store.
+3. Results arrive 20 at a time, which is the maximum Secrets Manager allows, and the provider follows
+   the pagination token until the last page. A tree of 200 settings is 10 calls per process at
+   startup.
+
+Three consequences worth knowing:
+
+* **A rotated secret is not picked up until `refresh!` or a restart.** Rotation changes the value in
+  AWS, not in the running process. If you rotate on a schedule, call `SecretConfig.refresh!` on one of
+  its own, or restart. This is not specific to rotation, it is how the in-memory cache has always
+  worked, but rotation is the case where it surprises people.
+* **A secret that cannot be read fails the load.** `batch_get_secret_value` reports a per-secret
+  failure, such as an `AccessDeniedException` on one key, in an `errors` array alongside a successful
+  response for the rest. Rather than starting up with a configuration that is quietly missing
+  settings, the provider raises `ConfigurationError` naming the secrets that failed.
+* **Binary secrets are skipped.** Secret Config deals in strings. A secret stored as `SecretBinary`
+  has no string value, so it is passed over rather than being loaded as an empty setting.
+
+Each secret read produces a CloudTrail `GetSecretValue` entry, including when it is read as part of a
+batch. A fleet of 50 processes restarting against 200 settings writes 10,000 entries.
+
+### Writing
+
+`set`, `[]=` and `delete` work, as do the corresponding [command line](cli) operations.
+
+A write updates the secret if it exists and creates it otherwise, always under this provider's KMS key.
+Every write creates a new version. Secrets Manager keeps 100 versions per secret and does not reclaim
+any that are less than a day old, so avoid writing the same key repeatedly in a loop. Importing a tree,
+where each key is written once, is unaffected.
+
+### Deleting
+
+This is the one place the two AWS providers genuinely differ. `delete_parameter` takes effect
+immediately. Secrets Manager instead **schedules** the deletion:
+
+* The secret stops being readable and drops out of the registry straight away.
+* The name stays reserved for `recovery_window_in_days`, 30 by default, during which `restore_secret`
+  can undo the deletion.
+* Until that window elapses, writing the same key again fails.
+
+The provider does not offer `ForceDeleteWithoutRecovery`. Discarding the recovery window throws away
+the safety net that is a large part of why a store like this is chosen, and it does not make the name
+reusable immediately in any case, since the permanent delete still happens asynchronously.
+
+The practical effect is that `secret-config --delete-tree` followed by `--import` of the same path does
+not work here the way it does against the Parameter Store. Import over the existing tree instead, with
+`--prune` if keys need removing, and treat deletes as rare.
+
+### Naming
+
+Secret names may contain ASCII letters, numbers and `/_+=.@-`, up to 512 characters. Two things to
+avoid in keys:
+
+* **Do not end a key with a hyphen followed by exactly six characters.** Secrets Manager appends a
+  hyphen and six random characters to build the ARN, and a name shaped that way is ambiguous when a
+  secret is looked up by partial ARN.
+* Characters outside that set, `:` for instance, are rejected by AWS even though the Parameter Store
+  accepts some of them.
+
+### IAM policy
+
+The application needs these actions:
+
+~~~json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:BatchGetSecretValue",
+                "secretsmanager:ListSecrets",
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:CreateSecret",
+                "secretsmanager:UpdateSecret",
+                "secretsmanager:DeleteSecret"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+~~~
+
+`ListSecrets` is required because the load filters by name, even though the provider never calls
+`ListSecrets` itself. An application that never writes needs only the first three actions.
+
+When the secrets are encrypted with a customer managed KMS key rather than `aws/secretsmanager`, the
+application also needs `kms:Decrypt` on that key, and `kms:GenerateDataKey` as well if it writes.
+
+`ListSecrets` cannot be narrowed by resource, so it has to be granted against `"*"`. Narrow the others
+to the paths the application actually uses when you can.
+
+### Limits and cost
+
+Secrets Manager is not free, and one secret per setting is the granularity that makes that add up:
+
+* **$0.40 per secret per month.** An application with 200 settings costs about $80 a month, where the
+  Parameter Store standard tier is free. Confirm current
+  [AWS Secrets Manager pricing](https://aws.amazon.com/secrets-manager/pricing/) for your account.
+* **$0.05 per 10,000 API calls.** Negligible in comparison, since the tree is read once per process
+  rather than per lookup.
+* **Maximum value size is 64KB**, against 8KB for the Parameter Store, and 4KB before that store moves
+  into its paid tier.
+* **500,000 secrets per region**, and 100 versions per secret.
+
+Rate limits are high enough not to need managing: 100 `BatchGetSecretValue` calls per second and
+10,000 `GetSecretValue` calls per second, per region. That is why this provider has no retry loop of
+the kind the SSM provider needs for its 40 calls per second. The AWS SDK's own retry handling covers
+the occasional throttle.
+
+### Choosing between the two AWS providers
+
+Use the Parameter Store for an application's configuration tree, and reach for Secrets Manager when
+something about the individual secret demands it:
+
+| | Parameter Store | Secrets Manager |
+| --- | --- | --- |
+| Cost | Free up to 10,000 standard parameters | $0.40 per secret per month |
+| Rotation | Build it yourself | Built in, with managed rotation for some AWS services |
+| Audit | CloudTrail on the API call | CloudTrail per secret read |
+| Delete | Immediate | Scheduled, 7 to 30 day recovery window |
+| Value size | 8KB, 4KB before the paid tier | 64KB |
+
+Both encrypt at rest with a KMS key you choose.
 
 ## Writing a provider
 

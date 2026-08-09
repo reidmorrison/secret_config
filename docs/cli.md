@@ -97,7 +97,9 @@ Then export it back to confirm it landed the way you expected:
 ## Step 4: Import into AWS SSM Parameter Store
 
 `--provider ssm` is the default, so it can be left off. This needs AWS credentials and the
-`aws-sdk-ssm` gem; see [Providers](providers).
+`aws-sdk-ssm` gem; see [Providers](providers). Every command here works the same way against
+`--provider secrets_manager`, with the `aws-sdk-secretsmanager` gem, except for `--delete-tree`, which
+Secrets Manager cannot make immediate.
 
     secret-config --import /production/my_application --file production.yml
 
@@ -286,7 +288,7 @@ secret-config [options]
     -f, --fetch KEY                  Fetch the value for one setting. Example: --fetch mysql/database.
     -d, --delete KEY                 Delete one specific key.
     -r, --delete-tree PATH           Recursively delete all keys under the specified path.
-        --provider PROVIDER          Provider to use. [ssm | file]. Default: ssm
+        --provider PROVIDER          Provider to use. [ssm | secrets_manager | file]. Default: ssm
         --provider-file FILE_NAME    For --provider file only. The config file to read and write. Default: $SECRET_CONFIG_FILE_NAME, then config/application.yml.
         --key_id KEY_ID              For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key.
         --key_alias KEY_ALIAS        For --import only. Encrypt config settings with this AWS KMS alias.

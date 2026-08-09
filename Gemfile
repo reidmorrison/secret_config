@@ -3,6 +3,7 @@ source "http://rubygems.org"
 gemspec
 
 gem "amazing_print"
+gem "aws-sdk-secretsmanager"
 gem "aws-sdk-ssm"
 gem "minitest"
 gem "minitest-mock"
