@@ -16,7 +16,7 @@ module SecretConfig
 
     extend Forwardable
 
-    PROVIDERS = %i[ssm file].freeze
+    PROVIDERS = %i[ssm secrets_manager file].freeze
 
     attr_reader :options
 
@@ -68,18 +68,23 @@ module SecretConfig
       @provider_instance ||=
         case provider
         when :ssm
-          if key_alias
-            Providers::Ssm.new(key_alias: key_alias)
-          elsif key_id
-            Providers::Ssm.new(key_id: key_id)
-          else
-            Providers::Ssm.new
-          end
+          Providers::Ssm.new(**kms_args)
+        when :secrets_manager
+          Providers::SecretsManager.new(**kms_args)
         when :file
           Providers::File.new(file_name: provider_file)
         else
           raise ArgumentError, "Invalid provider: #{provider}. Valid providers: #{PROVIDERS.join(' | ')}"
         end
+    end
+
+    # Returns [Hash] the KMS key to build an AWS provider with, empty when neither option was supplied
+    # so that the provider falls back to its own default rather than being handed an explicit nil.
+    def kms_args
+      return {key_alias: key_alias} if key_alias
+      return {key_id: key_id} if key_id
+
+      {}
     end
 
     def importer

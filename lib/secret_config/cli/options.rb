@@ -122,7 +122,7 @@ module SecretConfig
 
       # Which store to talk to, and how it encrypts what is written to it.
       def define_provider_options(opts)
-        opts.on "--provider PROVIDER", "Provider to use. [ssm | file]. Default: ssm" do |provider|
+        opts.on "--provider PROVIDER", "Provider to use. [ssm | secrets_manager | file]. Default: ssm" do |provider|
           @provider = provider.to_sym
         end
 

@@ -31,6 +31,7 @@ module SecretConfig
   module Providers
     autoload :File, "secret_config/providers/file"
     autoload :Provider, "secret_config/providers/provider"
+    autoload :SecretsManager, "secret_config/providers/secrets_manager"
     autoload :Ssm, "secret_config/providers/ssm"
   end
 

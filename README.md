@@ -4,8 +4,8 @@
 Ship the same image to every environment and tenant. Configuration and secrets come from one central store.
 
 Centralized configuration and secrets management for Ruby and Rails. Settings are read from AWS SSM
-Parameter Store, or a local file during development and test, and can be overridden with environment
-variables.
+Parameter Store, AWS Secrets Manager, or a local file during development and test, and can be
+overridden with environment variables.
 
 ## Documentation
 

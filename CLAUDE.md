@@ -5,9 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Overview
 
 `secret_config` is a Ruby gem for centralized configuration and secrets management. It reads a tree of
-key/value settings from a provider (AWS SSM Parameter Store or a local YAML file), flattens it into an
-in-memory cache at startup, and serves it through a global `SecretConfig` singleton. It ships a
-`secret-config` CLI for importing, exporting, diffing, and editing the central store.
+key/value settings from a provider (AWS SSM Parameter Store, AWS Secrets Manager, or a local YAML
+file), flattens it into an in-memory cache at startup, and serves it through a global `SecretConfig`
+singleton. It ships a `secret-config` CLI for importing, exporting, diffing, and editing the central
+store.
 
 Docs source lives in [docs/](docs/) (Jekyll site published to https://config.reidmorrison.com/).
 
@@ -71,10 +72,11 @@ enforced, so coverage cannot fail the build. `cover "lib/**/*.rb"` is set delibe
 uncovered, which inflates the total. (`cover` replaced the equivalent `track_files`, which SimpleCov now
 deprecates. The reported totals were identical either way.)
 
-The baseline is 98.23% line / 89.88% branch. Every file is at 100% except `cli.rb` (93.4%, the uncovered
-parts are `--console` and the SSM branches of `#provider_instance`, neither of which runs without AWS
-credentials or `irb`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback), and
-`providers/ssm.rb` (97.3%, the uncovered line is the `LoadError` rescue for a missing `aws-sdk-ssm`).
+The baseline is 98.33% line / 91.31% branch. Every file is at 100% except `cli.rb` (94.5%, the uncovered
+parts are `--console` and the two AWS branches of `#provider_instance`, none of which runs without AWS
+credentials or `irb`), `providers/file.rb` (98.7%, the uncovered line is a Psych 3 fallback),
+`providers/ssm.rb` (97.3%) and `providers/secrets_manager.rb` (97.6%), whose uncovered line in each case
+is the `LoadError` rescue for the missing AWS SDK gem.
 `railtie.rb` and `version.rb` report 0% for structural reasons: the railtie is only loaded under Rails, and
 the gemspec loads `version.rb` before SimpleCov starts.
 
@@ -110,7 +112,7 @@ from the central store.
       └── Registry            flat Concurrent::Map cache, type conversion, env-var override, filtering
             ├── Parser        absolute → relative keys, ${...} interpolation, __import__ expansion
             │     └── SettingInterpolator < StringInterpolator
-            └── Providers::{File,Ssm} < Providers::Provider
+            └── Providers::{File,Ssm,SecretsManager} < Providers::Provider
 
 ### Key model
 
@@ -222,6 +224,11 @@ passes `stub_responses: true` and `region:` through `Ssm#initialize` into `Aws::
 touches AWS and runs everywhere; use it for new SSM coverage.
 [test/providers/ssm_test.rb](test/providers/ssm_test.rb) does a live round trip and skips unless
 `AWS_ACCESS_KEY_ID` is set, which is the source of the suite's 2 skips.
+
+[test/providers/secrets_manager_stubbed_test.rb](test/providers/secrets_manager_stubbed_test.rb) covers
+the Secrets Manager provider the same stubbed way, and has no live counterpart on purpose: every secret
+a round trip created would be billed for a month and could not be deleted outright, since that provider
+deliberately does not offer `ForceDeleteWithoutRecovery`.
 
 A test that deliberately asserts current, undesired behavior carries a comment saying so, and says what
 the desired behavior is; update it when fixing the underlying issue rather than treating a failure there

@@ -128,9 +128,10 @@ environment. See the [Rails guide](rails).
 | --- | --- |
 | A local YAML file | Development and test. Checked into source control, holds no production credentials. |
 | AWS SSM Parameter Store | Production. Encrypted at rest with a KMS key you choose. |
-| Environment variables | Overriding any single setting from either store, in any environment. |
+| AWS Secrets Manager | Production, where rotation or per-secret audit logging is required. Costs more. Beta. |
+| Environment variables | Overriding any single setting from any store, in any environment. |
 
-Both stores are [providers](providers), and application code does not change between them. You can also
+Each store is a [provider](providers), and application code does not change between them. You can also
 write your own.
 
 ## What you get
@@ -145,9 +146,10 @@ write your own.
   developer, a deploy, or a code review.
 * **It costs almost nothing.** Standard-tier parameters are free, and a custom KMS key is about $1 per
   month. AWS Secrets Manager charges per secret, which adds up quickly at the scale of an entire
-  application's configuration. Confirm current
+  application's configuration, so reach for that provider when rotation or per-secret audit logging
+  calls for it. Confirm current
   [AWS SSM pricing](https://aws.amazon.com/systems-manager/pricing/) for your account, and see
-  [Providers](providers) for the Parameter Store size and rate limits.
+  [Providers](providers) for the size and rate limits of both.
 
 ## Next steps
 
