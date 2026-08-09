@@ -105,6 +105,11 @@ Setting `interpolate: false` stores every value exactly as it appears, tokens an
 `__import__` keys visible in the registry. It exists for tooling that needs to see the store verbatim.
 Applications should leave it on. See [Interpolation](interpolation).
 
+The other reason to turn it off is trust. `${env:NAME}` lets a setting read the process environment,
+and an absolute `__import__` lets it read another path, so whoever may write to a path can reach both.
+That is fine for a store your own team controls, which is the normal case. See
+[Interpolation](interpolation#what-the-store-is-trusted-to-do) for what a setting can and cannot do.
+
 ## Step 5: Set the filters, if the defaults do not fit
 
 Keys matching `SecretConfig.filters` have their values masked in `configuration` output and in command

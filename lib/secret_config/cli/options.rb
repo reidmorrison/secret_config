@@ -146,7 +146,7 @@ module SecretConfig
 
       # Flags that change how an --export or an --import behaves.
       def define_modifier_options(opts)
-        opts.on "--no-filter", "For --export only. Do not filter passwords and keys." do
+        opts.on "--no-filter", "For --export and --diff. Do not filter passwords and keys." do
           @no_filter = true
         end
 

@@ -419,6 +419,86 @@ class CLITest < Minitest::Test
         end
       end
 
+      # A diff is what you run to inspect a change before importing it, often in a terminal that is
+      # being recorded or a CI log, so it masks secrets the way --export does.
+      describe "filtering" do
+        it "masks a changed secret while still reporting that it changed" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"password" => "a-brand-new-password"}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            assert_includes out, "mysql/password"
+            assert_includes out, "- #{SecretConfig::FILTERED}"
+            assert_includes out, "+ #{SecretConfig::FILTERED}"
+            refute_includes out, "a-brand-new-password"
+            refute_includes out, "secret_configrules"
+          end
+        end
+
+        it "shows the real values with --no-filter" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"password" => "a-brand-new-password"}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source, "--no-filter"], store).run! }
+
+            assert_includes out, "- secret_configrules"
+            assert_includes out, "+ a-brand-new-password"
+          end
+        end
+
+        it "leaves a value that is not a secret in the clear" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"host" => "localhost"}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            assert_includes out, "- 127.0.0.1"
+            assert_includes out, "+ localhost"
+          end
+        end
+
+        it "masks a secret that only one side has" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"replica_password" => "brand-new"}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            assert_includes out, "mysql/replica_password"
+            assert_includes out, "+ #{SecretConfig::FILTERED}"
+            refute_includes out, "brand-new"
+          end
+        end
+
+        it "masks secrets when diffing two paths in the store" do
+          with_store do |store|
+            capture_io { build_cli(["--import", "/copy/my_application", "--path", path], store).run! }
+            capture_io { build_cli(["--set", "/copy/my_application/mysql/password=changed"], store).run! }
+
+            out, = capture_io { build_cli(["--diff", path, "--path", "/copy/my_application"], store).run! }
+
+            assert_includes out, "mysql/password"
+            refute_includes out, "changed"
+            refute_includes out, "secret_configrules"
+          end
+        end
+
+        it "still treats a [FILTERED] source value as no change at all" do
+          with_store do |store, dir|
+            source = File.join(dir, "source.yml")
+            File.write(source, {"mysql" => {"password" => SecretConfig::FILTERED}}.to_yaml)
+
+            out, = capture_io { build_cli(["--diff", path, "--file", source], store).run! }
+
+            refute_includes out, "mysql/password"
+          end
+        end
+      end
+
       it "reports a key that only the source has as an addition" do
         with_store do |store, dir|
           source = File.join(dir, "source.yml")

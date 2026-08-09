@@ -155,11 +155,7 @@ module SecretConfig
     end
 
     def filter_value(key, value, filters)
-      return value unless filters
-
-      _, name  = File.split(key)
-      filtered = filters.any? { |filter| filter.is_a?(Regexp) ? name =~ filter : name == filter }
-      filtered ? FILTERED : value
+      Utils.filtered?(key, filters) ? FILTERED : value
     end
 
     def convert_encoding(encoding, value)

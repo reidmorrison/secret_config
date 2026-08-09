@@ -918,6 +918,11 @@ Setting `interpolate: false` stores every value exactly as it appears, tokens an
 `__import__` keys visible in the registry. It exists for tooling that needs to see the store verbatim.
 Applications should leave it on. See [Interpolation](interpolation).
 
+The other reason to turn it off is trust. `${env:NAME}` lets a setting read the process environment,
+and an absolute `__import__` lets it read another path, so whoever may write to a path can reach both.
+That is fine for a store your own team controls, which is the normal case. See
+[Interpolation](interpolation#what-the-store-is-trusted-to-do) for what a setting can and cannot do.
+
 ## Step 5: Set the filters, if the defaults do not fit
 
 Keys matching `SecretConfig.filters` have their values masked in `configuration` output and in command
@@ -1223,7 +1228,11 @@ This grants only Parameter Store capabilities, not the rest of AWS Systems Manag
 never writes needs only the two `Get` actions.
 
 Narrow `Resource` to the paths the application actually uses when you can. `"*"` is shown here because
-the right ARN depends on your account and region.
+the right ARN depends on your account and region. That narrowing is worth the effort: `PutParameter` on
+a path is a stronger permission than it looks, because a setting written there can read the process
+environment of everything that loads it through `${env:...}`, and can read other paths through an
+absolute `__import__`. See
+[Interpolation](interpolation#what-the-store-is-trusted-to-do).
 
 These are not used by Secret Config, but are worth granting to anyone managing parameters through the
 AWS Console:
@@ -1755,6 +1764,36 @@ included everything inherited from `Object`, so a value such as `${send:...}` in
 could run arbitrary code in every process that loaded it. Declaring each token keeps the reachable
 surface to exactly what is listed.
 
+## What the store is trusted to do
+
+Interpolation runs against whatever the central store contains, so writing a setting is not quite the
+same as writing a plain string. Two tokens are worth knowing about when deciding who may write to a
+path:
+
+* **`${env:NAME}` reads the process environment.** A setting can therefore pull in any variable the
+  process has, including credentials that were never meant to be part of the configuration. The value
+  it produces is an ordinary setting afterwards: it appears in `SecretConfig.configuration` and in an
+  unfiltered `--export`, and it is masked only if the **key** it landed under matches
+  [the filters](config#step-5-set-the-filters-if-the-defaults-do-not-fit). A variable read into a key
+  named `timeout` is not masked by anything.
+* **`__import__` reads other paths.** An absolute import reads any path the process's credentials can
+  reach, not only paths under the application's own root.
+
+Neither can run code, and no token can: dispatch is limited to the table above. But both mean that
+**write access to a path should be treated as roughly equivalent to read access to the environment and
+the store** of every process that loads it. Grant it accordingly, and prefer separate IAM policies per
+environment over one that spans them.
+
+For a store you do not fully control, `interpolate: false` turns both off and returns every value
+exactly as stored, tokens and all:
+
+~~~ruby
+SecretConfig.use(:ssm, path: "/production/my_application", interpolate: false)
+~~~
+
+That is a blunt instrument, since it also disables `${random}`, `${hostname}` and imports. See
+[Configuration](config).
+
 Reserved keys:
 
 | Key | Meaning |
@@ -1903,6 +1942,18 @@ alone. `--prune` removes them, making the store match the file exactly:
     secret-config --import /production/my_application --file production.yml --prune
 
 Run the diff first, and read the `-` lines. That is the list `--prune` will delete.
+
+Secrets are masked as `[FILTERED]` on both sides, the same way `--export` masks them, so a diff is safe
+to run in a recorded terminal or a CI log. A masked key that changed is still reported as changed; only
+its value is withheld:
+
+    mysql/password:
+    - [FILTERED]
+    + [FILTERED]
+
+Add `--no-filter` when you need to see which value it actually is:
+
+    secret-config --diff /production/my_application --file production.yml --no-filter
 
 ## Step 6: Export for review or backup
 
@@ -2075,7 +2126,7 @@ secret-config [options]
         --provider-file FILE_NAME    For --provider file only. The config file to read and write. Default: $SECRET_CONFIG_FILE_NAME, then config/application.yml.
         --key_id KEY_ID              For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key.
         --key_alias KEY_ALIAS        For --import only. Encrypt config settings with this AWS KMS alias.
-        --no-filter                  For --export only. Do not filter passwords and keys.
+        --no-filter                  For --export and --diff. Do not filter passwords and keys.
         --interpolate                For --export only. Evaluate string interpolation and __import__.
         --prune                      For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import.
         --force                      For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key.

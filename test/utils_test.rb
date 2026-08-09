@@ -91,6 +91,27 @@ class UtilsTest < Minitest::Test
       end
     end
 
+    # Shared by `Registry#configuration` and the CLI's `--diff`, which have to agree about what
+    # counts as a secret.
+    describe ".filtered?" do
+      let(:filters) { SecretConfig.filters }
+
+      it "matches on the last segment of the key" do
+        assert SecretConfig::Utils.filtered?("mysql/password", filters)
+        refute SecretConfig::Utils.filtered?("password_policy/max_age", filters)
+      end
+
+      it "matches a string filter only when the name is equal" do
+        assert SecretConfig::Utils.filtered?("mysql/token", ["token"])
+        refute SecretConfig::Utils.filtered?("mysql/token_age", ["token"])
+      end
+
+      it "filters nothing when there are no filters" do
+        refute SecretConfig::Utils.filtered?("mysql/password", nil)
+        refute SecretConfig::Utils.filtered?("mysql/password", [])
+      end
+    end
+
     describe ".camelize" do
       it "converts an underscored name" do
         assert_equal "NotAProvider", SecretConfig::Utils.camelize("not_a_provider")

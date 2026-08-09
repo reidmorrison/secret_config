@@ -234,7 +234,11 @@ This grants only Parameter Store capabilities, not the rest of AWS Systems Manag
 never writes needs only the two `Get` actions.
 
 Narrow `Resource` to the paths the application actually uses when you can. `"*"` is shown here because
-the right ARN depends on your account and region.
+the right ARN depends on your account and region. That narrowing is worth the effort: `PutParameter` on
+a path is a stronger permission than it looks, because a setting written there can read the process
+environment of everything that loads it through `${env:...}`, and can read other paths through an
+absolute `__import__`. See
+[Interpolation](interpolation#what-the-store-is-trusted-to-do).
 
 These are not used by Secret Config, but are worth granting to anyone managing parameters through the
 AWS Console:

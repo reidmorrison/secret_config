@@ -267,6 +267,36 @@ included everything inherited from `Object`, so a value such as `${send:...}` in
 could run arbitrary code in every process that loaded it. Declaring each token keeps the reachable
 surface to exactly what is listed.
 
+## What the store is trusted to do
+
+Interpolation runs against whatever the central store contains, so writing a setting is not quite the
+same as writing a plain string. Two tokens are worth knowing about when deciding who may write to a
+path:
+
+* **`${env:NAME}` reads the process environment.** A setting can therefore pull in any variable the
+  process has, including credentials that were never meant to be part of the configuration. The value
+  it produces is an ordinary setting afterwards: it appears in `SecretConfig.configuration` and in an
+  unfiltered `--export`, and it is masked only if the **key** it landed under matches
+  [the filters](config#step-5-set-the-filters-if-the-defaults-do-not-fit). A variable read into a key
+  named `timeout` is not masked by anything.
+* **`__import__` reads other paths.** An absolute import reads any path the process's credentials can
+  reach, not only paths under the application's own root.
+
+Neither can run code, and no token can: dispatch is limited to the table above. But both mean that
+**write access to a path should be treated as roughly equivalent to read access to the environment and
+the store** of every process that loads it. Grant it accordingly, and prefer separate IAM policies per
+environment over one that spans them.
+
+For a store you do not fully control, `interpolate: false` turns both off and returns every value
+exactly as stored, tokens and all:
+
+~~~ruby
+SecretConfig.use(:ssm, path: "/production/my_application", interpolate: false)
+~~~
+
+That is a blunt instrument, since it also disables `${random}`, `${hostname}` and imports. See
+[Configuration](config).
+
 Reserved keys:
 
 | Key | Meaning |

@@ -136,6 +136,18 @@ alone. `--prune` removes them, making the store match the file exactly:
 
 Run the diff first, and read the `-` lines. That is the list `--prune` will delete.
 
+Secrets are masked as `[FILTERED]` on both sides, the same way `--export` masks them, so a diff is safe
+to run in a recorded terminal or a CI log. A masked key that changed is still reported as changed; only
+its value is withheld:
+
+    mysql/password:
+    - [FILTERED]
+    + [FILTERED]
+
+Add `--no-filter` when you need to see which value it actually is:
+
+    secret-config --diff /production/my_application --file production.yml --no-filter
+
 ## Step 6: Export for review or backup
 
     secret-config --export /production/my_application --file production.yml
@@ -307,7 +319,7 @@ secret-config [options]
         --provider-file FILE_NAME    For --provider file only. The config file to read and write. Default: $SECRET_CONFIG_FILE_NAME, then config/application.yml.
         --key_id KEY_ID              For --import only. Encrypt config settings with this AWS KMS key id. Default: AWS Default key.
         --key_alias KEY_ALIAS        For --import only. Encrypt config settings with this AWS KMS alias.
-        --no-filter                  For --export only. Do not filter passwords and keys.
+        --no-filter                  For --export and --diff. Do not filter passwords and keys.
         --interpolate                For --export only. Evaluate string interpolation and __import__.
         --prune                      For --import only. During import delete all existing keys for which there is no key in the import file. Only works with --import.
         --force                      For --import only. Overwrite all values, not just the changed ones. Useful for changing the KMS key.

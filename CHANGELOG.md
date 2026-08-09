@@ -2,13 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
-This project adheres to [Semantic Versioning](https://semver.org/). Entries for releases prior to
-v1.0.1 were reconstructed from the git history and are summaries rather than exhaustive lists.
+This project adheres to [Semantic Versioning](https://semver.org/). Entries for releases up to and
+including v1.0.0 were reconstructed from the git history and are summaries rather than exhaustive lists.
 
 ## Unreleased
 
-Targeted at v2, since it carries breaking changes. The entries under **Security** are the exception:
-none of them is breaking, and they are candidates for a 1.0.1 patch ahead of v2.
+Targeted at v2, since it carries breaking changes.
 
 ### Security
 
@@ -27,9 +26,23 @@ none of them is breaking, and they are candidates for a 1.0.1 patch ahead of v2.
   settings, and secrets in the case of `--export --no-filter`, in the clear. New files are created with
   mode `0600`. A file that already exists keeps its mode, since it may have been widened deliberately,
   and a warning naming it is printed instead.
+- **`--diff` masks secrets by default**, the way `--export` already did, with `--no-filter` to see them.
+  A diff is what you run to check a change before importing it, frequently in a terminal being recorded
+  or a CI log, and it printed every password in the clear with no way to ask it not to. Masking is
+  applied when a value is printed, never before the two sides are compared, so a password that changed
+  is still reported as changed; only its value is withheld. **Breaking** for anything parsing `--diff`
+  output that expects values in the clear: add `--no-filter`.
 - The `Gemfile` sourced gems over `http://`.
 - The CI workflow now declares `permissions: contents: read` rather than taking the repository default
   for `GITHUB_TOKEN`.
+
+### Documentation
+
+- What a value in the central store is trusted to do now has a section of its own,
+  [What the store is trusted to do](https://config.reidmorrison.com/interpolation.html). `${env:NAME}`
+  reads the process environment and an absolute `__import__` reads another path, so write access to a
+  path is closer to read access to the environment and the store of every process that loads it than it
+  looks. Referenced from the SSM IAM policy and from `interpolate:`.
 
 ### Deprecated (security)
 

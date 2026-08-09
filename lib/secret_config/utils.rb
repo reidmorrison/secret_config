@@ -32,6 +32,19 @@ module SecretConfig
     end
     private_class_method :warn_when_readable
 
+    # Returns [true|false] whether the value of the supplied key should be masked as `FILTERED`.
+    #
+    # Only the last segment of the key is matched, so `mysql/password` is filtered by `/password/i`
+    # while `password_policy/max_age` is not. `filters` holds Regexps, matched against the name, and
+    # Strings, which must equal it. Shared by `Registry#configuration` and the CLI's `--diff`, which
+    # have to agree about what counts as a secret.
+    def self.filtered?(key, filters)
+      return false unless filters
+
+      _, name = ::File.split(key)
+      filters.any? { |filter| filter.is_a?(Regexp) ? name.match?(filter) : name == filter }
+    end
+
     # Takes a hierarchical structure and flattens it to a single level.
     # If path is supplied it is prepended to every key returned.
     def self.flatten_each(hash, path = nil, &block)
