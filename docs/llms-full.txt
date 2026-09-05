@@ -13,8 +13,6 @@ A per-page index is available at https://config.reidmorrison.com/llms.txt
 
 ## What is Secret Config?
 
-
-
 Secret Config is centralized configuration and secrets management for Ruby and Rails applications. It
 lets you ship the same image to every environment and tenant, because the configuration and secrets no
 longer travel with the image.
@@ -169,8 +167,6 @@ write your own.
 <!-- source: docs/guide.md -->
 
 ## Getting Started
-
-
 
 This page takes an existing application from no Secret Config at all to reading its first settings, and
 then converts the configuration files it already has. It stays on the local file provider throughout, so
@@ -375,8 +371,6 @@ instead of repeating it. See [Naming a subtree once](api#step-9-name-a-subtree-o
 <!-- source: docs/api.md -->
 
 ## Guide
-
-
 
 This page walks the whole programming interface, one step at a time. Each step builds on the one before
 it, using a single example application whose configuration grows as it goes.
@@ -821,8 +815,6 @@ No root path was resolved. Outside Rails there is nothing to fall back on, so pa
 
 ## Configuration
 
-
-
 This page covers everything that decides how the registry is built at startup: which provider it reads
 from, what root path it reads under, and the environment variables that override both.
 
@@ -1001,8 +993,6 @@ That is how a test suite points at a different store; see [Testing](testing).
 <!-- source: docs/providers.md -->
 
 ## Providers
-
-
 
 A provider is where settings are actually stored. Three ship with the gem, and application code reads
 the same way against any of them:
@@ -1505,8 +1495,6 @@ telling the reader what to install.
 
 ## Interpolation and Imports
 
-
-
 Values are not always literal. Secret Config understands two kinds of markup inside the store:
 
 * **`${...}` interpolation** substitutes something known only at runtime into a value: the host name,
@@ -1814,8 +1802,6 @@ Reserved keys:
 <!-- source: docs/cli.md -->
 
 ## Command Line
-
-
 
 `secret-config` manages the central store: importing settings into it, exporting them back out, diffing
 a candidate file against what is there, and editing individual keys.
@@ -2161,8 +2147,6 @@ Note that `-f` is `--fetch`. `--file` has no short form.
 
 ## Rails
 
-
-
 In a Rails application, Secret Config is set up once in `application.rb` and is then available to every
 initializer, every `.yml` file, and the application itself.
 
@@ -2418,8 +2402,6 @@ handles, but importing the file is easier than setting the keys one at a time. S
 
 ## Testing
 
-
-
 Tests need two things from Secret Config: settings that are the same on every machine and in CI, and a
 way to change one setting for one test without disturbing the others.
 
@@ -2626,8 +2608,6 @@ that is what [`key?`](api#step-7-ask-whether-a-key-is-set) answers.
 <!-- source: docs/upgrading.md -->
 
 ## Upgrading
-
-
 
 This page covers what changes between major versions and what to do about it. The full record, including
 every non-breaking change, is in

@@ -1,9 +1,10 @@
 ---
 layout: default
+title: Configuration
+description: >-
+  Everything that decides how the registry is built at startup: the provider, the
+  root path, the environment variables that override both, and the filters.
 ---
-
-## Configuration
-{:.no_toc}
 
 **Contents**
 

@@ -10,7 +10,7 @@ file), flattens it into an in-memory cache at startup, and serves it through a g
 singleton. It ships a `secret-config` CLI for importing, exporting, diffing, and editing the central
 store.
 
-Docs source lives in [docs/](docs/) (Jekyll site published to https://config.reidmorrison.com/).
+Docs source lives in [docs/](docs/) (Jekyll site published to https://config.reidmorrison.com/). See "Docs" below before changing anything there.
 
 There are no known issues or open design questions outstanding. The `TECH_DEBT.md` that tracked them is
 gone, having been worked through; [CHANGELOG.md](CHANGELOG.md) carries what came of each item. If a review
@@ -217,6 +217,16 @@ Subclass `Providers::Provider` and implement `each(path)` (yielding absolute key
 `Utils.constantize_symbol` resolves `:my_provider` to `SecretConfig::Providers::MyProvider`. Optional
 backends require their gem inside a `begin/rescue LoadError` that re-raises with an install hint, as
 [providers/ssm.rb](lib/secret_config/providers/ssm.rb) does.
+
+## Docs
+
+User-facing documentation is a Jekyll site under [docs/](docs/), published to https://config.reidmorrison.com/.
+
+**The look and feel is not in this repo.** `docs/_config.yml` sets `remote_theme: reidmorrison/rm-docs-theme@v1`, and the layout, stylesheet, sidebar and syntax highlighting all come from there. This repo holds only its content: the markdown pages and `docs/images`. **Do not add a `docs/_layouts`, `docs/stylesheets` or `docs/javascripts` directory** — they were deleted deliberately, because six gem repos each carried a near-identical copy of the same theme and the copies had drifted. A styling change belongs in `rm-docs-theme`, where it reaches every doc site at once. `v1` is a moving major tag, so theme fixes arrive on the next build; breaking changes go to `v2` and are opted into by editing the pin. `jekyll-remote-theme` must stay in `plugins`: GitHub Pages enables it on its own, but a local build does not, and without it every page silently renders with no layout. Preview against a local theme checkout with `~/src/rm-docs-theme/bin/preview ~/src/secret_config/docs`.
+
+**A page's title lives in its front matter**, not in a `## Heading` at the top of the markdown; the theme renders it as the page's `h1`. `title` is the browser title and the default heading, `heading` overrides the h1 where the two should differ, and `description` is the page's meta description. `index.md` sets `heading` only, so the home page keeps the tuned SEO `<title>` from `_config.yml`. Adding or renaming a page means editing the `nav` block in `docs/_config.yml`, the `pages` list in the `llms_full` rake task, and `docs/llms.txt`.
+
+The site also serves two files for AI assistants: [docs/llms.txt](docs/llms.txt), a hand-maintained index of the docs pages, and `docs/llms-full.txt`, all pages concatenated, regenerated with `bundle exec rake llms_full`. **After editing any `docs/*.md` page, re-run `bundle exec rake llms_full`** and commit the result; never edit `llms-full.txt` by hand. That task strips front matter, so it lifts the page heading back out of it: a page that sets neither `heading` nor `title` loses its section title there.
 
 ## Tests
 

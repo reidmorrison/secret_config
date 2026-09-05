@@ -1,9 +1,10 @@
 ---
 layout: default
+title: Upgrading
+description: >-
+  What changes between major versions and what to do about it, including the v2
+  breaking changes and how to silence the deprecation warnings.
 ---
-
-## Upgrading
-{:.no_toc}
 
 **Contents**
 

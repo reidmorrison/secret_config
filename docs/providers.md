@@ -1,9 +1,10 @@
 ---
 layout: default
+title: Providers
+description: >-
+  Where settings are actually stored: a local YAML file, AWS SSM Parameter Store,
+  or AWS Secrets Manager, and the options and failure modes of each.
 ---
-
-## Providers
-{:.no_toc}
 
 **Contents**
 

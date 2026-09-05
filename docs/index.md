@@ -1,9 +1,7 @@
 ---
 layout: default
+heading: What is Secret Config?
 ---
-
-## What is Secret Config?
-{:.no_toc}
 
 **Contents**
 

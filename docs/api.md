@@ -1,9 +1,10 @@
 ---
 layout: default
+title: Guide
+description: >-
+  The whole programming interface, one step at a time: reading values, defaults,
+  types, lists, environment overrides, subtrees, and refreshing at runtime.
 ---
-
-## Guide
-{:.no_toc}
 
 **Contents**
 

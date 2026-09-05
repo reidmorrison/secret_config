@@ -1,9 +1,10 @@
 ---
 layout: default
+title: Testing
+description: >-
+  Giving a test suite its own settings, overriding one setting for one test, and
+  using an in-memory store. Nothing here needs AWS.
 ---
-
-## Testing
-{:.no_toc}
 
 **Contents**
 
