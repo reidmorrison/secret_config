@@ -1,9 +1,10 @@
 ---
 layout: default
+title: Interpolation and Imports
+description: >-
+  Substituting the host, the date, an environment variable or a generated value
+  into a setting with ${...}, and sharing subtrees with __import__.
 ---
-
-## Interpolation and Imports
-{:.no_toc}
 
 **Contents**
 

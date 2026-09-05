@@ -1,9 +1,10 @@
 ---
 layout: default
+title: Getting Started
+description: >-
+  Take an application from no Secret Config at all to reading its first settings,
+  then convert the configuration files it already has. No AWS account needed.
 ---
-
-## Getting Started
-{:.no_toc}
 
 **Contents**
 

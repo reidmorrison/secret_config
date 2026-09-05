@@ -1,9 +1,10 @@
 ---
 layout: default
+title: Command Line
+description: >-
+  The secret-config CLI: importing, exporting, diffing and editing the central
+  store, copying a path to spin up a tenant, and rotating a KMS key.
 ---
-
-## Command Line
-{:.no_toc}
 
 **Contents**
 

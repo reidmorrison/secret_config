@@ -1,9 +1,10 @@
 ---
 layout: default
+title: Rails
+description: >-
+  Setting Secret Config up in application.rb, converting database.yml, deploying
+  in containers, and worked examples for logging, email and encryption.
 ---
-
-## Rails
-{:.no_toc}
 
 **Contents**
 
